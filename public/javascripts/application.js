@@ -4,11 +4,11 @@ function RenderAll() {
         for (var i in json.Containers.Containers) {
             buttons="";
             if (json.Containers.Containers[i].Status.split(" ")[0] == "Up") {
-                buttons = "<button type=\"button\" id=\""+json.Containers.Containers[i].Id+"\" data-loading-text=\"Stopping...\" class=\"btn btn-primary btn-stop-cont\">Stop</button>"
+                buttons = "<button type=\"button\" dockid=\"stop_"+json.Containers.Containers[i].Id+"\" data-loading-text=\"Stopping...\" class=\"btn btn-primary btn-stop-cont\">Stop</button>"
                 // buttons = "<a href=\"/api/containers/stop/"+json.Containers.Containers[i].Id+"\">Stop</a>";
             } else {
-                buttons = "<button type=\"button\" id=\""+json.Containers.Containers[i].Id+"\" data-loading-text=\"Starting...\" class=\"btn btn-primary btn-start-cont\">Start</button>"
-                buttons += "<button type=\"button\" id=\""+json.Containers.Containers[i].Id+"\" data-loading-text=\"Removing...\" class=\"btn btn-primary btn-del-cont\">Delete</button>"
+                buttons = "<button type=\"button\" dockid=\"start_"+json.Containers.Containers[i].Id+"\" data-loading-text=\"Starting...\" class=\"btn btn-primary btn-start-cont\">Start</button>"
+                buttons += "<button type=\"button\" dockid=\"del_"+json.Containers.Containers[i].Id+"\" data-loading-text=\"Removing...\" class=\"btn btn-primary btn-del-cont\">Delete</button>"
                 // buttons = "<a href=\"/api/containers/start/"+json.Containers.Containers[i].Id+"\">Start</a>";
                 // buttons += "<a href=\"/api/containers/del/"+json.Containers.Containers[i].Id+"\">Delete</a>";
             }
@@ -90,7 +90,6 @@ function RenderAll() {
 }
 
 $(document).ready(function(){
-  $('#btn-clean-all').button();
   $('#btn-clean-all').click(function() {
     $(this).button('loading');
     $.getJSON('/api/clean', function(json) {
@@ -101,7 +100,6 @@ $(document).ready(function(){
     });
   });  
 
-  $('#btn-clean-cont').button();
   $('#btn-clean-cont').click(function() {
     $(this).button('loading');
     $.getJSON('/api/containers/clean', function(json) {
@@ -112,7 +110,6 @@ $(document).ready(function(){
     });
   });
 
-  $('#btn-clean-images').button();
   $('#btn-clean-images').click(function() {
     $(this).button('loading');
     $.getJSON('/api/images/clean', function(json) {
@@ -125,34 +122,34 @@ $(document).ready(function(){
 
   $('.btn-start-cont').click(function() {
     // $(this).button('starting');
-    var id = $(this).attr('id');
+    var id = $(this).attr('id').split("_")[1];
     alert("Start" + id);
     $.getJSON('/api/containers/start/'+id, function(json) {
         if (json.status == 0) {
             RenderAll();
         }
     });
-  });  
+  });
 
   $('.btn-stop-cont').click(function() {
-    $(this).button('stopping');
-    var id = $(this).attr('id');
+    // $(this).button('stopping');
+    var id = $(this).attr('id').split("_")[1];
     $.getJSON('/api/containers/stop/'+id, function(json) {
         if (json.status == 0) {
             RenderAll();
         }
     });
-  });  
+  });
 
   $('.btn-del-cont').click(function() {
-    $(this).button('deleting');
-    var id = $(this).attr('id');
+    // $(this).button('deleting');
+    var id = $(this).attr('id').split("_")[1];
     $.getJSON('/api/containers/del/'+id, function(json) {
         if (json.status == 0) {
             RenderAll();
         }
     });
-  });  
+  });
 
   RenderAll();
   var timerID = setInterval(function(){RenderAll()}, 10 * 1000); // 60 * 1000 milsec
