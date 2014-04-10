@@ -278,6 +278,17 @@ func (l *Lib) RemoveContainers(ids []string) error {
 	color.Println("Done")
 	return nil
 }
+func (l *Lib) StartContainer(id string) error {
+	color.Println("@bREMOVING: "+color.ResetCode, id)
+	err := l.client.StartContainer(id, nil)
+	//.RemoveContainer(docker.RemoveContainerOptions{ID: id})
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		return err
+	}
+	color.Println("Done")
+	return nil
+}
 
 func (l *Lib) RemoveImages(ids []string) error {
 	for _, id := range ids {

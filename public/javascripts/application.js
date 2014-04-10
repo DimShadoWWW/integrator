@@ -1,8 +1,19 @@
 function RenderAll() {
     $.getJSON('/api/status', function(json) {
-        var output="<table class=\"table table-striped\"><thead><tr><th>ID</th><th>Names</th><th>Image</th><th>Status</th></tr></thead><tbody>";
+        var output="<table class=\"table table-striped\"><thead><tr><th>ID</th><th>Names</th><th>Image</th><th>Status</th><th>Actions</th></tr></thead><tbody>";
         for (var i in json.Containers.Containers) {
-            output+="<tr><td>"+json.Containers.Containers[i].Id.substring(0,12) +"</td><td>" + json.Containers.Containers[i].Names +"</td><td>" + json.Containers.Containers[i].Image +"</td><td>" + json.Containers.Containers[i].Status +"</td></tr>";
+            buttons="";
+            if (json.Containers.Containers[i].Status.split(" ")[0] == "Up") {
+                buttons = "<button type=\"button\" id=\""+json.Containers.Containers[i].Id+"\" data-loading-text=\"Stopping...\" class=\"btn btn-primary btn-stop-cont\">Stop</button>"
+                // buttons = "<a href=\"/api/containers/stop/"+json.Containers.Containers[i].Id+"\">Stop</a>";
+            } else {
+                buttons = "<button type=\"button\" id=\""+json.Containers.Containers[i].Id+"\" data-loading-text=\"Starting...\" class=\"btn btn-primary btn-start-cont\">Start</button>"
+                buttons += "<button type=\"button\" id=\""+json.Containers.Containers[i].Id+"\" data-loading-text=\"Removing...\" class=\"btn btn-primary btn-del-cont\">Delete</button>"
+                // buttons = "<a href=\"/api/containers/start/"+json.Containers.Containers[i].Id+"\">Start</a>";
+                // buttons += "<a href=\"/api/containers/del/"+json.Containers.Containers[i].Id+"\">Delete</a>";
+            }
+            output+="<tr><td>"+json.Containers.Containers[i].Id.substring(0,12) +"</td><td>" + json.Containers.Containers[i].Names +"</td><td>" + json.Containers.Containers[i].Image +"</td><td>" + json.Containers.Containers[i].Status +
+            "</td><td>"+buttons+"</td></tr>";
         }
         output+="</tbody></table>";
 
@@ -78,5 +89,71 @@ function RenderAll() {
     });
 }
 
-RenderAll();
-var timerID = setInterval(function(){RenderAll()}, 10 * 1000); // 60 * 1000 milsec
+$(document).ready(function(){
+  $('#btn-clean-all').button();
+  $('#btn-clean-all').click(function() {
+    $(this).button('loading');
+    $.getJSON('/api/clean', function(json) {
+        if (json.status == 0) {
+            RenderAll();
+        }
+        $(this).button('reset');
+    });
+  });  
+
+  $('#btn-clean-cont').button();
+  $('#btn-clean-cont').click(function() {
+    $(this).button('loading');
+    $.getJSON('/api/containers/clean', function(json) {
+        if (json.status == 0) {
+            RenderAll();
+        }
+        $(this).button('reset');
+    });
+  });
+
+  $('#btn-clean-images').button();
+  $('#btn-clean-images').click(function() {
+    $(this).button('loading');
+    $.getJSON('/api/images/clean', function(json) {
+        if (json.status == 0) {
+            RenderAll();
+        }
+        $(this).button('reset');
+    });
+  });  
+
+  $('.btn-start-cont').click(function() {
+    // $(this).button('starting');
+    var id = $(this).attr('id');
+    alert("Start" + id);
+    $.getJSON('/api/containers/start/'+id, function(json) {
+        if (json.status == 0) {
+            RenderAll();
+        }
+    });
+  });  
+
+  $('.btn-stop-cont').click(function() {
+    $(this).button('stopping');
+    var id = $(this).attr('id');
+    $.getJSON('/api/containers/stop/'+id, function(json) {
+        if (json.status == 0) {
+            RenderAll();
+        }
+    });
+  });  
+
+  $('.btn-del-cont').click(function() {
+    $(this).button('deleting');
+    var id = $(this).attr('id');
+    $.getJSON('/api/containers/del/'+id, function(json) {
+        if (json.status == 0) {
+            RenderAll();
+        }
+    });
+  });  
+
+  RenderAll();
+  var timerID = setInterval(function(){RenderAll()}, 10 * 1000); // 60 * 1000 milsec
+});
