@@ -8,16 +8,18 @@ import (
 	"github.com/deckarep/golang-set"
 	"github.com/dotcloud/docker/engine"
 	"github.com/dotcloud/docker/nat"
+	"github.com/dotcloud/docker/utils"
 	"github.com/fsouza/go-dockerclient"
+	"github.com/stevedomin/termtable"
 	"github.com/wsxiaoys/terminal/color"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"strings"
+	"time"
 	// "net/url"
-	// "strings"
-	// "time"
 )
 
 var _ = log.Print // for debugging, remove
@@ -215,6 +217,18 @@ func (l *Lib) getContainerID(name string) (string, error) {
 	return "", Error("Container not found")
 }
 
+// This work with api verion < v1.7 and > v1.9
+type APIImages struct {
+	ID          string   `json:"Id"`
+	RepoTags    []string `json:",omitempty"`
+	Created     int64
+	Size        int64
+	VirtualSize int64
+	ParentId    string `json:",omitempty"`
+	Repository  string `json:",omitempty"`
+	Tag         string `json:",omitempty"`
+}
+
 type APIPort struct {
 	PrivatePort int64
 	PublicPort  int64
@@ -231,7 +245,7 @@ type APIContainers struct {
 	Ports      []APIPort
 	SizeRw     int64
 	SizeRootFs int64
-	Names      []string
+	Names      string
 }
 
 func (l *Lib) ListImages() {
@@ -261,9 +275,22 @@ func (l *Lib) RemoveContainers(ids []string) error {
 			return err
 		}
 	}
+	color.Println("Done")
 	return nil
 }
 
+func (l *Lib) RemoveImages(ids []string) error {
+	for _, id := range ids {
+		color.Println("@bREMOVING: "+color.ResetCode, id)
+		err := l.client.RemoveImage(id)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			return err
+		}
+	}
+	color.Println("Done")
+	return nil
+}
 func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 	query := "0"
 	if all {
@@ -303,7 +330,12 @@ func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 	for _, out := range outs.Data {
 		var c APIContainers
 		c.ID = out.Get("Id")
-		c.Names = out.GetList("Names")
+		for _, n := range out.GetList("Names") {
+			if strings.Index(strings.Replace(n, "/", "", 1), "/") == -1 {
+				c.Names = strings.Replace(n, "/", "", 1)
+				break
+			}
+		}
 		c.Image = out.Get("Image")
 		c.Command = out.Get("Command")
 		c.Created = out.GetInt64("Created")
@@ -327,6 +359,125 @@ func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 		containers = append(containers, c)
 	}
 	return containers, nil
+}
+
+func (l *Lib) GetImages() ([]APIImages, error) {
+
+	req, err := http.NewRequest("GET", "/images/json", nil)
+
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "mine")
+	var resp *http.Response
+	dial, err := net.Dial("unix", "/var/run/docker.sock")
+	// "unix", "/var/run/docker.sock")
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		return nil, err
+	}
+	clientconn := httputil.NewClientConn(dial, nil)
+	resp, err = clientconn.Do(req)
+	// fmt.Println(resp)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		return nil, err
+	}
+
+	outs := engine.NewTable("Created", 0)
+	if _, err := outs.ReadListFrom(body); err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		return nil, err
+	}
+	var images []APIImages
+	for _, out := range outs.Data {
+		var c APIImages
+
+		// ID          string   `json:"Id"`
+		// RepoTags    []string `json:",omitempty"`
+		// Created     int64
+		// Size        int64
+		// VirtualSize int64
+		// ParentId    string `json:",omitempty"`
+		// Repository  string `json:",omitempty"`
+		// Tag         string `json:",omitempty"`
+		c.ID = out.Get("Id")
+		c.ParentId = out.Get("ParentId")
+		c.Repository = out.Get("Repository")
+		c.Tag = out.Get("Tag")
+		c.RepoTags = out.GetList("RepoTags")
+		c.Created = out.GetInt64("Created")
+		c.Size = out.GetInt64("Size")
+		c.VirtualSize = out.GetInt64("VirtualSize")
+
+		images = append(images, c)
+	}
+	return images, nil
+}
+
+func (l *Lib) Status() {
+	color.Println("Docker status:")
+	// list all containers
+	cont_run, err := l.GetContainers(false)
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+	}
+	cont_all, err := l.GetContainers(true)
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+
+	// // list running containers
+	running := mapset.NewSet()
+	for _, cont := range cont_run {
+		// color.Println("@rID: "+color.ResetCode, cont.ID)
+		running.Add(cont.ID)
+	}
+	all := mapset.NewSet()
+	for _, cont := range cont_all {
+		// color.Println("@bID: "+color.ResetCode, cont.ID)
+		all.Add(cont.ID)
+	}
+
+	color.Println("@bContainers"+color.ResetCode+":", len(all),
+		"\t@rRunning"+color.ResetCode+":", len(running),
+		"@yStopped"+color.ResetCode+":", len(all.Difference(running)))
+
+	t := termtable.NewTable(nil, nil)
+	t.SetHeader([]string{"ID", "Image", "status"})
+	for _, c := range cont_all {
+		t.AddRow([]string{c.ID, c.Image, c.Status})
+	}
+	color.Println(t.Render())
+
+	imgs_all, err := l.GetImages()
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+
+	imgs_good := 0
+	imgs_none := 0
+	for _, img := range imgs_all {
+		if img.RepoTags[0] != "<none>:<none>" {
+			imgs_good = imgs_good + 1
+		} else {
+			imgs_none = imgs_none + 1
+		}
+	}
+
+	color.Println("@bImages"+color.ResetCode+":", len(imgs_all),
+		"\t@rGood"+color.ResetCode+":", imgs_good,
+		"@yTrash"+color.ResetCode+":", imgs_none)
+
+	t1 := termtable.NewTable(nil, nil)
+	t1.SetHeader([]string{"ID", "Repository:Tag", "Created"})
+	for _, i := range imgs_all {
+		t1.AddRow([]string{i.ID, i.RepoTags[0], utils.HumanDuration(time.Now().UTC().Sub(time.Unix(i.Created, 0)))})
+	}
+	color.Println(t1.Render())
 }
 
 func (l *Lib) CleanContainers() []string {
@@ -359,5 +510,23 @@ func (l *Lib) CleanContainers() []string {
 	for id, _ := range all.Difference(running) {
 		ids = append(ids, id.(string))
 	}
+	return ids
+}
+
+func (l *Lib) CleanImages() []string {
+
+	imgs_all, err := l.GetImages()
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+
+	var ids []string
+	for _, img := range imgs_all {
+		if img.RepoTags[0] == "<none>:<none>" {
+			ids = append(ids, img.ID)
+		}
+	}
+
+	color.Println("To remove: @r", len(ids), color.ResetCode, " images")
 	return ids
 }
