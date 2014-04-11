@@ -79,16 +79,21 @@ body {
 /*
  * Placeholder dashboard ideas
  */
-
 .placeholders {
   margin-bottom: 30px;
   text-align: center;
+}
+.myplaceholders {
+  height: 200px;
+  width: 200px;
 }
 .placeholders h4 {
   margin-bottom: 0;
 }
 .placeholder {
   margin-bottom: 20px;
+  height: 200px;
+  width: 300px;
 }
 .placeholder img {
   display: inline-block;

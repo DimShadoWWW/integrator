@@ -9,6 +9,7 @@ import (
 	"github.com/wsxiaoys/terminal/color"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,6 +99,14 @@ type Status struct {
 }
 
 func StatusHandler(c http.ResponseWriter, r *http.Request) {
+	a := getIpAddress(r)
+	rip, err := net.ResolveTCPAddr("tcp", a+":0")
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+
+	color.Println("@bACCESS from: "+color.ResetCode, rip.IP)
+
 	cont_all, err := client.GetContainers(true)
 	if err != nil {
 		color.Errorf("@bERROR: "+color.ResetCode, err)
@@ -113,7 +122,7 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 		switch strings.Split(c.Status, " ")[0] {
 		case "Up":
 			up = up + 1
-		case "Exit":
+		case "Exit", "Exited":
 			if strings.Split(c.Status, " ")[1] == "0" {
 				down = down + 1
 			} else {
@@ -289,4 +298,31 @@ func CleanImagesHandler(c http.ResponseWriter, r *http.Request) {
 	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 	c.Header().Set("Content-Type", "application/json")
 	io.WriteString(c, string(result))
+}
+
+func ipAddrFromRemoteAddr(s string) string {
+	idx := strings.LastIndex(s, ":")
+	if idx == -1 {
+		return s
+	}
+	return s[:idx]
+}
+
+func getIpAddress(r *http.Request) string {
+	hdr := r.Header
+	hdrRealIp := hdr.Get("X-Real-Ip")
+	hdrForwardedFor := hdr.Get("X-Forwarded-For")
+	if hdrRealIp == "" && hdrForwardedFor == "" {
+		return ipAddrFromRemoteAddr(r.RemoteAddr)
+	}
+	if hdrForwardedFor != "" {
+		// X-Forwarded-For is potentially a list of addresses separated with ","
+		parts := strings.Split(hdrForwardedFor, ",")
+		for i, p := range parts {
+			parts[i] = strings.TrimSpace(p)
+		}
+		// TODO: should return first non-local address
+		return parts[0]
+	}
+	return hdrRealIp
 }
