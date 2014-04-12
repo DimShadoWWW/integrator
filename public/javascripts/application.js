@@ -1,5 +1,5 @@
 $(document).ready(function(){
-    var options = {series: {pie: {show: true, label: {show: true, radius: 1}, offset: {left: -30}}}};
+    var options = {series: {pie: {show: true, label: {show: true, radius: 1}, offset: {left: -25}}}};
 
     // Initiate a recurring data update
     var data_containers = [];
@@ -9,32 +9,15 @@ $(document).ready(function(){
     function fetchData() {
         ++iteration;
         function onDataReceived(series) {
-            var output="<table class=\"table table-striped\"><thead><tr><th>ID</th><th>Names</th><th>Image</th><th>Status</th><th>Actions</th></tr></thead><tbody>";
-            for (var i in series.Containers.Containers) {
-                buttons="";
-                if (series.Containers.Containers[i].Status.split(" ")[0] == "Up") {
-                    buttons = "<button type=\"button\" onclick=\"$.ajax({url: '/api/containers/stop/"+series.Containers.Containers[i].Id+"',type: 'GET',dataType: 'json'})\" data-loading-text=\"Stopping...\" class=\"btn btn-primary btn-stop-cont\">Stop</button>"
-                } else {
-                    buttons = "<button type=\"button\" onclick=\"$.ajax({url: '/api/containers/start/"+series.Containers.Containers[i].Id+"',type: 'GET',dataType: 'json'})\" data-loading-text=\"Starting...\" class=\"btn btn-primary btn-start-cont\">Start</button>"
-                    buttons += "<button type=\"button\" id=\"del_"+series.Containers.Containers[i].Id+"\" data-loading-text=\"Removing...\" class=\"btn btn-primary btn-del-cont\">Delete</button>"
-                }
-                output+="<tr><td>"+series.Containers.Containers[i].Id.substring(0,12) +"</td><td>" + series.Containers.Containers[i].Names +"</td><td>" + series.Containers.Containers[i].Image +"</td><td>" + series.Containers.Containers[i].Status +
-                "</td><td>"+buttons+"</td></tr>";
-            }
-            output+="</tbody></table>";
-            $('#content').html(output);
+            CreateButtons(series);
 
             data_containers = [];
-            // var legend_containers="<table class=\"table table-striped\"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody>";
             for (var i in series.Containers.Status) {
                 data_containers.push({
                     label:   i,
                     data: series.Containers.Status[i]
                     });
-                // legend_containers+="<tr><td class=\"text-muted\">"+ i +"</td><td class=\"text-muted\">" + series.Containers.Status[i] +"</td></tr>";
             }
-            // legend_containers+="</tbody></table>";
-            // $('#content').html(legend_containers);
 
             var data_images = [];
             // var legend_images="<table class=\"table table-striped\"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody>";
@@ -43,11 +26,7 @@ $(document).ready(function(){
                     label:   i,
                     data: series.Images.Status[i]
                     });
-                // legend_images+="<tr><td class=\"text-muted\">"+ i +"</td><td class=\"text-muted\">" + series.Images.Status[i] +"</td></tr>";
             }
-            // legend_images+="</tbody></table>";
-            // $('#content').html(legend_images);
-
             $.plot("#placeholder-containers", data_containers, options);
             $.plot("#placeholder-images", data_images, options);
         }
@@ -63,7 +42,7 @@ $(document).ready(function(){
     }
 
     fetchData();
-    var timerID = setInterval(function(){fetchData()}, 1000);
+    var timerID = setInterval(function(){fetchData()}, 3000);
 
     $('#btn-clean-all').click(function() {
         $(this).button('loading');
