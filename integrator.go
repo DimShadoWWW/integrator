@@ -66,13 +66,17 @@ func main() {
 	//
 
 	r := mux.NewRouter()
-	r.HandleFunc("/api/containers", ContainerStatusHandler)
 	r.HandleFunc("/api/status", StatusHandler)
+	r.HandleFunc("/api/containers", StatusContainerHandler)
 	r.HandleFunc("/api/containers/del/{id}", DelContainerHandler)
 	r.HandleFunc("/api/containers/stop/{id}", StopContainerHandler)
 	r.HandleFunc("/api/containers/start/{id}", StartContainerHandler)
-	r.HandleFunc("/api/clean", CleanHandler)
 	r.HandleFunc("/api/containers/clean", CleanContainersHandler)
+	r.HandleFunc("/api/containers/new", RunContainerHandler)
+	r.HandleFunc("/api/clean", CleanHandler)
+	r.HandleFunc("/api/images", StatusImageHandler)
+	r.HandleFunc("/api/images/build/{name}", BuildImageHandler)
+	r.HandleFunc("/api/images/del/{id}", DelImageHandler)
 	r.HandleFunc("/api/images/clean", CleanImagesHandler)
 	http.Handle("/api/", r)
 
@@ -178,7 +182,8 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 	io.WriteString(c, string(result))
 }
 
-func ContainerStatusHandler(c http.ResponseWriter, r *http.Request) {
+//Containers
+func StatusContainerHandler(c http.ResponseWriter, r *http.Request) {
 	cont_all, err := client.GetContainers(true)
 	if err != nil {
 		color.Errorf("@bERROR: "+color.ResetCode, err)
@@ -196,6 +201,26 @@ func ContainerStatusHandler(c http.ResponseWriter, r *http.Request) {
 }
 
 func StartContainerHandler(c http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	status := map[string]string{"status": "0"}
+	err := client.client.StartContainer(id, nil)
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		status = map[string]string{"status": "1", "error": err.Error()}
+	}
+
+	result, err := json.Marshal(status)
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+	c.Header().Set("Content-Type", "application/json")
+	io.WriteString(c, string(result))
+}
+
+func RunContainerHandler(c http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -256,22 +281,6 @@ func DelContainerHandler(c http.ResponseWriter, r *http.Request) {
 	io.WriteString(c, string(result))
 }
 
-func CleanHandler(c http.ResponseWriter, r *http.Request) {
-	containers := client.CleanContainers()
-	client.RemoveContainers(containers)
-	images := client.CleanImages()
-	client.RemoveImages(images)
-
-	status := map[string]int{"status": 0}
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
-}
-
 func CleanContainersHandler(c http.ResponseWriter, r *http.Request) {
 	containers := client.CleanContainers()
 	client.RemoveContainers(containers)
@@ -286,7 +295,84 @@ func CleanContainersHandler(c http.ResponseWriter, r *http.Request) {
 	io.WriteString(c, string(result))
 }
 
+//Images
+func StatusImageHandler(c http.ResponseWriter, r *http.Request) {
+	cont_all, err := client.GetImages()
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+
+	result, err := json.Marshal(cont_all)
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+
+	//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
+	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+	c.Header().Set("Content-Type", "application/json")
+	io.WriteString(c, string(result))
+}
+
+func BuildImageHandler(c http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["name"]
+
+	status := map[string]string{}
+	id, err := client.BuildImage(id)
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		status = map[string]string{"status": "1", "error": err.Error()}
+	} else {
+		status = map[string]string{"status": "0", "id": id}
+	}
+
+	result, err := json.Marshal(status)
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+	c.Header().Set("Content-Type", "application/json")
+	io.WriteString(c, string(result))
+}
+
+func DelImageHandler(c http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	status := map[string]string{"status": "0"}
+	err := client.client.RemoveImage(id)
+	if err != nil {
+		color.Errorf("@rERROR: "+color.ResetCode, err)
+		status = map[string]string{"status": "1", "error": err.Error()}
+	}
+
+	result, err := json.Marshal(status)
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+	c.Header().Set("Content-Type", "application/json")
+	io.WriteString(c, string(result))
+}
+
 func CleanImagesHandler(c http.ResponseWriter, r *http.Request) {
+	images := client.CleanImages()
+	client.RemoveImages(images)
+
+	status := map[string]int{"status": 0}
+	result, err := json.Marshal(status)
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, err)
+	}
+	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+	c.Header().Set("Content-Type", "application/json")
+	io.WriteString(c, string(result))
+}
+
+//General functions
+func CleanHandler(c http.ResponseWriter, r *http.Request) {
+	containers := client.CleanContainers()
+	client.RemoveContainers(containers)
 	images := client.CleanImages()
 	client.RemoveImages(images)
 

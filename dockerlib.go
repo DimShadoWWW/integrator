@@ -37,6 +37,47 @@ type Lib struct {
 	localip string
 }
 
+// This work with api verion < v1.7 and > v1.9
+type APIImages struct {
+	ID          string   `json:"Id"`
+	RepoTags    []string `json:",omitempty"`
+	Created     int64
+	Size        int64
+	VirtualSize int64
+	ParentId    string `json:",omitempty"`
+	Repository  string `json:",omitempty"`
+	Tag         string `json:",omitempty"`
+}
+
+type APIPort struct {
+	PrivatePort int64
+	PublicPort  int64
+	Type        string
+	IP          string
+}
+
+type APIContainers struct {
+	ID         string `json:"Id"`
+	Image      string
+	Command    string
+	Created    int64
+	Status     string
+	Ports      []APIPort
+	SizeRw     int64
+	SizeRootFs int64
+	Names      string
+	Dns        string
+	DnsSearch  string
+	Env        []string
+	Links      []string
+	Volume     []string
+	Detach     bool
+	User       string
+	Workdir    string
+	Hostname   string
+	Privileged bool
+}
+
 func NewDockerLib(address string) Lib {
 	c, err := docker.NewClient(address)
 	if err != nil {
@@ -217,37 +258,6 @@ func (l *Lib) getContainerID(name string) (string, error) {
 	return "", Error("Container not found")
 }
 
-// This work with api verion < v1.7 and > v1.9
-type APIImages struct {
-	ID          string   `json:"Id"`
-	RepoTags    []string `json:",omitempty"`
-	Created     int64
-	Size        int64
-	VirtualSize int64
-	ParentId    string `json:",omitempty"`
-	Repository  string `json:",omitempty"`
-	Tag         string `json:",omitempty"`
-}
-
-type APIPort struct {
-	PrivatePort int64
-	PublicPort  int64
-	Type        string
-	IP          string
-}
-
-type APIContainers struct {
-	ID         string `json:"Id"`
-	Image      string
-	Command    string
-	Created    int64
-	Status     string
-	Ports      []APIPort
-	SizeRw     int64
-	SizeRootFs int64
-	Names      string
-}
-
 func (l *Lib) ListImages() {
 	imgs, _ := l.client.ListImages(false)
 	for _, img := range imgs {
@@ -278,6 +288,7 @@ func (l *Lib) RemoveContainers(ids []string) error {
 	color.Println("Done")
 	return nil
 }
+
 func (l *Lib) StartContainer(id string) error {
 	color.Println("@bREMOVING: "+color.ResetCode, id)
 	err := l.client.StartContainer(id, nil)
@@ -302,6 +313,7 @@ func (l *Lib) RemoveImages(ids []string) error {
 	color.Println("Done")
 	return nil
 }
+
 func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 	query := "0"
 	if all {
@@ -540,4 +552,21 @@ func (l *Lib) CleanImages() []string {
 
 	color.Println("To remove: @r", len(ids), color.ResetCode, " images")
 	return ids
+}
+
+func (l *Lib) BuildImage(name string) (string, error) {
+	// imgs_all, err := l.client.BuildImage(opts)
+	// if err != nil {
+	// 	color.Errorf("@bERROR: "+color.ResetCode, err)
+	// }
+
+	// var ids []string
+	// for _, img := range imgs_all {
+	// 	if img.RepoTags[0] == "<none>:<none>" {
+	// 		ids = append(ids, img.ID)
+	// 	}
+	// }
+
+	// color.Println("To remove: @r", len(ids), color.ResetCode, " images")
+	return "", nil
 }
