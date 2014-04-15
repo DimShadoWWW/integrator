@@ -1,0 +1,17 @@
+[target]
+path = github.com/DimShadoWWW/integrator
+
+[deps]
+github.com/GeertJohan/go.rice =
+github.com/gorilla/mux =
+github.com/wsxiaoys/terminal/color =
+github.com/deckarep/golang-set =
+github.com/dotcloud/docker/engine =
+github.com/dotcloud/docker/nat =
+github.com/dotcloud/docker/utils =
+github.com/fsouza/go-dockerclient =
+github.com/stevedomin/termtable =
+
+[res]
+include = public
+

@@ -1,5 +1,24 @@
 $(document).ready(function(){
-    var options = {series: {pie: {show: true, label: {show: true, radius: 1}, offset: {left: -25}}}};
+    $("td.timeago").timeago();
+    var options = {series: {
+                    pie: {
+                        show: true,
+                        label: {
+                            show: true,
+                            radius: 3/4,
+                            formatter: function(label, series){
+                                return '<div style="font-size:8pt;text-align:center;padding:2px;color:rgba(111, 73, 73, 1);">'+label+'<br/>'+Math.round(series.percent)+'% ('+series.data[0][1]+')</div>';
+                            }
+                        },
+                        background: {
+                            opacity: 0.5
+                        },
+                        offset: {
+                            left: -25
+                        }
+                    }
+                }
+            };
 
     // Initiate a recurring data update
     var data_containers = [];
