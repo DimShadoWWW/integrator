@@ -1,0 +1,5 @@
+{
+    "Address": "unix:///var/run/docker.sock",
+    "Port": "8080",
+    "ApiKey": "CHANGEME"
+}

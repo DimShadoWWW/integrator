@@ -11,13 +11,19 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
 	// "regexp"
-	// "os"
 	// "text/template"
 )
+
+type Configuration struct {
+	Address string
+	Port    string
+	ApiKey  string
+}
 
 var (
 	// address to access docker API
@@ -27,45 +33,56 @@ var (
 	port string
 
 	client Lib
+
+	APIKey string
 )
 
 func main() {
+	defaultAddress := "unix:///var/run/docker.sock"
+	defaultPort := "8080"
+	defaultAPIKey := "CHANGE_ME"
+
+	if _, err := os.Stat("config.json"); err == nil {
+		file, _ := os.Open("config.json")
+		decoder := json.NewDecoder(file)
+		configuration := Configuration{}
+		err := decoder.Decode(&configuration)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		defaultAddress = configuration.Address
+		defaultPort = configuration.Port
+		defaultAPIKey = configuration.ApiKey
+	}
+
 	// parse command line flags
-	flag.StringVar(&address, "address", "unix:///var/run/docker.sock", "docker address")
-	flag.StringVar(&port, "port", "8080", "docker address")
+	flag.StringVar(&address, "address", defaultAddress, "docker address")
+	flag.StringVar(&port, "port", defaultPort, "docker address")
+	flag.StringVar(&APIKey, "apikey", defaultAPIKey, "docker address")
 	flag.Parse()
 
-	// flag.Usage = func() {
-	// 	fmt.Printf("Usage: %s [options] command\n", os.Args[0])
-	// 	flag.PrintDefaults()
-	// 	fmt.Println("")
-	// 	fmt.Println("Commands: ")
-	// 	fmt.Println("  clearall, ca: Remove non running containers and old images")
-	// 	fmt.Println("  clearcontainers, cc: Remove non running containers")
-	// 	fmt.Println("  clearimages, ci: Remove nontagged images")
-	// 	fmt.Println("  status, st: Docker status")
-	// }
+	color.Println(APIKey)
+	color.Println(address)
+	color.Println(port)
+
 	client = NewDockerLib(address)
-	// switch flag.Arg(0) {
-	// case "clearall", "ca":
-	// 	containers := client.CleanContainers()
-	// 	client.RemoveContainers(containers)
-	// 	images := client.CleanImages()
-	// 	client.RemoveImages(images)
-	// case "clearcontainers", "cc":
-	// 	containers := client.CleanContainers()
-	// 	client.RemoveContainers(containers)
-	// case "clearimages", "ci":
-	// 	images := client.CleanImages()
-	// 	client.RemoveImages(images)
-	// case "status", "st":
-	// 	client.Status()
-	// default:
-	// 	flag.Usage()
-	// }
-	//
+
+	checkHeaderThenServe := func(h http.Handler) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			// Set some header.
+			if r.Header.Get("API-Access") == APIKey {
+				w.Header().Add("Keep-Alive", "300")
+				// Serve with the actual handler.
+				h.ServeHTTP(w, r)
+			} else {
+				// http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+				color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+			}
+		}
+	}
 
 	r := mux.NewRouter()
+	// r.Headers("API-Access", APIKey)
 	r.HandleFunc("/api/status", StatusHandler)
 	r.HandleFunc("/api/containers", StatusContainerHandler)
 	r.HandleFunc("/api/containers/del/{id}", DelContainerHandler)
@@ -80,7 +97,7 @@ func main() {
 	r.HandleFunc("/api/images/clean", CleanImagesHandler)
 	http.Handle("/api/", r)
 
-	http.Handle("/", http.FileServer(rice.MustFindBox("public").HTTPBox()))
+	http.Handle("/", checkHeaderThenServe(http.FileServer(rice.MustFindBox("public").HTTPBox())))
 	err := http.ListenAndServe(":"+port, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -102,288 +119,355 @@ type Status struct {
 	Images     ImagesStatus
 }
 
+func checkaccess(a string) bool {
+	if a == APIKey {
+		return true
+	}
+	return false
+}
+
 func StatusHandler(c http.ResponseWriter, r *http.Request) {
-	a := getIpAddress(r)
-	rip, err := net.ResolveTCPAddr("tcp", a+":0")
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+	if checkaccess(r.Header.Get("API-Access")) {
+		a := getIpAddress(r)
+		rip, err := net.ResolveTCPAddr("tcp", a+":0")
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
 
-	color.Println("@bACCESS from: "+color.ResetCode, rip.IP)
+		color.Println("@bACCESS from: "+color.ResetCode, rip.IP)
 
-	cont_all, err := client.GetContainers(true)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+		cont_all, err := client.GetContainers(true)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
 
-	var results Status
-	up := 0
-	failed := 0
-	down := 0
-	unknown := 0
-	var contstatus []APIContainers
-	for _, c := range cont_all {
-		switch strings.Split(c.Status, " ")[0] {
-		case "Up":
-			up = up + 1
-		case "Exit", "Exited":
-			if strings.Split(c.Status, " ")[1] == "0" {
-				down = down + 1
-			} else {
-				failed = failed + 1
+		var results Status
+		up := 0
+		failed := 0
+		down := 0
+		unknown := 0
+		var contstatus []APIContainers
+		for _, c := range cont_all {
+			switch strings.Split(c.Status, " ")[0] {
+			case "Up":
+				up = up + 1
+			case "Exit", "Exited":
+				if strings.Split(c.Status, " ")[1] == "0" {
+					down = down + 1
+				} else {
+					failed = failed + 1
+				}
+			default:
+				unknown = unknown + 1
 			}
-		default:
-			unknown = unknown + 1
+			contstatus = append(contstatus, c)
 		}
-		contstatus = append(contstatus, c)
-	}
 
-	images, err := client.GetImages()
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
-
-	good := 0
-	temp := 0
-	var imgstatus []APIImages
-	for _, img := range images {
-		if img.RepoTags[0] != "<none>:<none>" {
-			good = good + 1
-		} else {
-			temp = temp + 1
+		images, err := client.GetImages()
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
 		}
-		imgstatus = append(imgstatus, img)
-	}
-	results = Status{
-		Containers: ContainerStatus{
-			Containers: contstatus,
-			Status:     map[string]int{"up": up, "down": down, "failed": failed, "unknown": unknown},
-		},
-		Images: ImagesStatus{
-			Images: imgstatus,
-			Status: map[string]int{"good": good, "temp": temp},
-		},
-	}
 
-	result, err := json.Marshal(results)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+		good := 0
+		temp := 0
+		var imgstatus []APIImages
+		for _, img := range images {
+			if img.RepoTags[0] != "<none>:<none>" {
+				good = good + 1
+			} else {
+				temp = temp + 1
+			}
+			imgstatus = append(imgstatus, img)
+		}
+		results = Status{
+			Containers: ContainerStatus{
+				Containers: contstatus,
+				Status:     map[string]int{"up": up, "down": down, "failed": failed, "unknown": unknown},
+			},
+			Images: ImagesStatus{
+				Images: imgstatus,
+				Status: map[string]int{"good": good, "temp": temp},
+			},
+		}
 
-	var r1 interface{}
-	err = json.Unmarshal(result, &r1)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+		result, err := json.Marshal(results)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
 
-	//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
+		var r1 interface{}
+		err = json.Unmarshal(result, &r1)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+
+		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+	}
 }
 
 //Containers
 func StatusContainerHandler(c http.ResponseWriter, r *http.Request) {
-	cont_all, err := client.GetContainers(true)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+	if checkaccess(r.Header.Get("API-Access")) {
+		cont_all, err := client.GetContainers(true)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
 
-	result, err := json.Marshal(cont_all)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+		result, err := json.Marshal(cont_all)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
 
-	//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
+		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+	}
 }
 
 func StartContainerHandler(c http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["id"]
 
-	status := map[string]string{"status": "0"}
-	err := client.client.StartContainer(id, nil)
-	if err != nil {
-		color.Errorf("@rERROR: "+color.ResetCode, err)
-		status = map[string]string{"status": "1", "error": err.Error()}
-	}
+		status := map[string]string{"status": "0"}
+		err := client.client.StartContainer(id, nil)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		}
 
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 func RunContainerHandler(c http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["id"]
 
-	status := map[string]string{"status": "0"}
-	err := client.client.StartContainer(id, nil)
-	if err != nil {
-		color.Errorf("@rERROR: "+color.ResetCode, err)
-		status = map[string]string{"status": "1", "error": err.Error()}
-	}
+		status := map[string]string{"status": "0"}
+		err := client.client.StartContainer(id, nil)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		}
 
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 func StopContainerHandler(c http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["id"]
 
-	status := map[string]string{"status": "0"}
+		status := map[string]string{"status": "0"}
 
-	err := client.client.StopContainer(id, 20)
-	if err != nil {
-		color.Errorf("@rERROR: "+color.ResetCode, err)
-		status = map[string]string{"status": "1", "error": err.Error()}
+		err := client.client.StopContainer(id, 20)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		}
+
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 func DelContainerHandler(c http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["id"]
 
-	status := map[string]string{"status": "0"}
-	err := client.client.RemoveContainer(docker.RemoveContainerOptions{ID: id})
-	if err != nil {
-		color.Errorf("@rERROR: "+color.ResetCode, err)
-		status = map[string]string{"status": "1", "error": err.Error()}
-	}
+		status := map[string]string{"status": "0"}
+		err := client.client.RemoveContainer(docker.RemoveContainerOptions{ID: id})
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		}
 
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 func CleanContainersHandler(c http.ResponseWriter, r *http.Request) {
-	containers := client.CleanContainers()
-	client.RemoveContainers(containers)
+	if checkaccess(r.Header.Get("API-Access")) {
+		containers := client.CleanContainers()
+		client.RemoveContainers(containers)
 
-	status := map[string]int{"status": 0}
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
+		status := map[string]int{"status": 0}
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 //Images
 func StatusImageHandler(c http.ResponseWriter, r *http.Request) {
-	cont_all, err := client.GetImages()
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+	if checkaccess(r.Header.Get("API-Access")) {
+		cont_all, err := client.GetImages()
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
 
-	result, err := json.Marshal(cont_all)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
+		result, err := json.Marshal(cont_all)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
 
-	//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
+		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+	}
 }
 
 func BuildImageHandler(c http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["name"]
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["name"]
 
-	status := map[string]string{}
-	id, err := client.BuildImage(id)
-	if err != nil {
-		color.Errorf("@rERROR: "+color.ResetCode, err)
-		status = map[string]string{"status": "1", "error": err.Error()}
+		status := map[string]string{}
+		id, err := client.BuildImage(id)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		} else {
+			status = map[string]string{"status": "0", "id": id}
+		}
+
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
 	} else {
-		status = map[string]string{"status": "0", "id": id}
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
-	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 func DelImageHandler(c http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["id"]
 
-	status := map[string]string{"status": "0"}
-	err := client.client.RemoveImage(id)
-	if err != nil {
-		color.Errorf("@rERROR: "+color.ResetCode, err)
-		status = map[string]string{"status": "1", "error": err.Error()}
-	}
+		status := map[string]string{"status": "0"}
+		err := client.client.RemoveImage(id)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		}
 
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 func CleanImagesHandler(c http.ResponseWriter, r *http.Request) {
-	images := client.CleanImages()
-	client.RemoveImages(images)
+	if checkaccess(r.Header.Get("API-Access")) {
+		images := client.CleanImages()
+		client.RemoveImages(images)
 
-	status := map[string]int{"status": 0}
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
+		status := map[string]int{"status": 0}
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 //General functions
 func CleanHandler(c http.ResponseWriter, r *http.Request) {
-	containers := client.CleanContainers()
-	client.RemoveContainers(containers)
-	images := client.CleanImages()
-	client.RemoveImages(images)
+	if checkaccess(r.Header.Get("API-Access")) {
+		containers := client.CleanContainers()
+		client.RemoveContainers(containers)
+		images := client.CleanImages()
+		client.RemoveImages(images)
 
-	status := map[string]int{"status": 0}
-	result, err := json.Marshal(status)
-	if err != nil {
-		color.Errorf("@bERROR: "+color.ResetCode, err)
+		status := map[string]int{"status": 0}
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+		}
+		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, string(result))
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
-	c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-	c.Header().Set("Content-Type", "application/json")
-	io.WriteString(c, string(result))
 }
 
 func ipAddrFromRemoteAddr(s string) string {
