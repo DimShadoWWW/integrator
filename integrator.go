@@ -3,21 +3,21 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"github.com/DimShadoWWW/integrator/dockerlib"
+	// "github.com/DimShadoWWW/integrator/etcdlib"
 	"github.com/GeertJohan/go.rice"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/gorilla/mux"
 	"github.com/wsxiaoys/terminal/color"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
-
-	// "regexp"
-	// "text/template"
 )
+import log "github.com/cihub/seelog"
 
 type Configuration struct {
 	Address string
@@ -32,12 +32,33 @@ var (
 	// port to listen on
 	port string
 
-	client Lib
+	client dockerlib.Lib
 
 	APIKey string
 )
 
 func main() {
+
+	var logConfig = `
+ 	<seelog type="asyncloop" minlevel="info">
+ 	<outputs>
+ 	<file path="/home/core/integrator.log" formatid="main"/>
+ 	</outputs>
+ 	<formats>
+ 	<format id="main" format="%Date %Time [%Level] %Msg%n"/>
+ 	</formats>
+ 	</seelog>`
+
+	logger, err := log.LoggerFromConfigAsBytes([]byte(logConfig))
+
+	if err != nil {
+		color.Errorf("@bERROR: "+color.ResetCode, "Error during logger config load: ", err.Error())
+	}
+
+	log.ReplaceLogger(logger)
+
+	defer log.Flush()
+
 	defaultAddress := "unix:///var/run/docker.sock"
 	defaultPort := "8080"
 	defaultAPIKey := "CHANGE_ME"
@@ -65,7 +86,7 @@ func main() {
 	color.Println(address)
 	color.Println(port)
 
-	client = NewDockerLib(address)
+	client = dockerlib.NewDockerLib(address)
 
 	checkHeaderThenServe := func(h http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -98,19 +119,25 @@ func main() {
 	http.Handle("/api/", r)
 
 	http.Handle("/", checkHeaderThenServe(http.FileServer(rice.MustFindBox("public").HTTPBox())))
-	err := http.ListenAndServe(":"+port, nil)
+	err = http.ListenAndServe(":"+port, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
 	}
 }
 
+func newClient() *etcd.Client {
+	etcdclient := etcd.NewClient([]string{"https://127.0.0.1:4001"})
+	etcdclient.SyncCluster()
+	return etcdclient
+}
+
 type ContainerStatus struct {
-	Containers []APIContainers
+	Containers []dockerlib.APIContainers
 	Status     map[string]int
 }
 
 type ImagesStatus struct {
-	Images []APIImages
+	Images []dockerlib.APIImages
 	Status map[string]int
 }
 
@@ -146,7 +173,7 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 		failed := 0
 		down := 0
 		unknown := 0
-		var contstatus []APIContainers
+		var contstatus []dockerlib.APIContainers
 		for _, c := range cont_all {
 			switch strings.Split(c.Status, " ")[0] {
 			case "Up":
@@ -170,7 +197,7 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 
 		good := 0
 		temp := 0
-		var imgstatus []APIImages
+		var imgstatus []dockerlib.APIImages
 		for _, img := range images {
 			if img.RepoTags[0] != "<none>:<none>" {
 				good = good + 1
@@ -240,7 +267,7 @@ func StartContainerHandler(c http.ResponseWriter, r *http.Request) {
 		id := vars["id"]
 
 		status := map[string]string{"status": "0"}
-		err := client.client.StartContainer(id, nil)
+		err := client.Client.StartContainer(id, nil)
 		if err != nil {
 			color.Errorf("@rERROR: "+color.ResetCode, err)
 			status = map[string]string{"status": "1", "error": err.Error()}
@@ -265,7 +292,7 @@ func RunContainerHandler(c http.ResponseWriter, r *http.Request) {
 		id := vars["id"]
 
 		status := map[string]string{"status": "0"}
-		err := client.client.StartContainer(id, nil)
+		err := client.Client.StartContainer(id, nil)
 		if err != nil {
 			color.Errorf("@rERROR: "+color.ResetCode, err)
 			status = map[string]string{"status": "1", "error": err.Error()}
@@ -291,7 +318,7 @@ func StopContainerHandler(c http.ResponseWriter, r *http.Request) {
 
 		status := map[string]string{"status": "0"}
 
-		err := client.client.StopContainer(id, 20)
+		err := client.Client.StopContainer(id, 20)
 		if err != nil {
 			color.Errorf("@rERROR: "+color.ResetCode, err)
 			status = map[string]string{"status": "1", "error": err.Error()}
@@ -316,7 +343,7 @@ func DelContainerHandler(c http.ResponseWriter, r *http.Request) {
 		id := vars["id"]
 
 		status := map[string]string{"status": "0"}
-		err := client.client.RemoveContainer(docker.RemoveContainerOptions{ID: id})
+		err := client.Client.RemoveContainer(docker.RemoveContainerOptions{ID: id})
 		if err != nil {
 			color.Errorf("@rERROR: "+color.ResetCode, err)
 			status = map[string]string{"status": "1", "error": err.Error()}
@@ -410,7 +437,7 @@ func DelImageHandler(c http.ResponseWriter, r *http.Request) {
 		id := vars["id"]
 
 		status := map[string]string{"status": "0"}
-		err := client.client.RemoveImage(id)
+		err := client.Client.RemoveImage(id)
 		if err != nil {
 			color.Errorf("@rERROR: "+color.ResetCode, err)
 			status = map[string]string{"status": "1", "error": err.Error()}

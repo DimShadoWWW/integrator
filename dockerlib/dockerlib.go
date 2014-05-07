@@ -1,4 +1,4 @@
-package main
+package dockerlib
 
 import (
 	// "errors"
@@ -13,7 +13,6 @@ import (
 	"github.com/stevedomin/termtable"
 	"github.com/wsxiaoys/terminal/color"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -21,8 +20,8 @@ import (
 	"time"
 	// "net/url"
 )
+import log "github.com/cihub/seelog"
 
-var _ = log.Print // for debugging, remove
 type Error string
 
 func (e Error) Error() string {
@@ -30,11 +29,11 @@ func (e Error) Error() string {
 }
 
 type Lib struct {
-	address string
-	cfg     []string
-	client  *docker.Client
+	Address string
+	Cfg     []string
+	Client  *docker.Client
 	// pids    PidLib
-	localip string
+	Localip string
 }
 
 // This work with api verion < v1.7 and > v1.9
@@ -98,7 +97,7 @@ func NewDockerLib(address string) Lib {
 			ip = addrs[0].String()
 		}
 	}
-	return Lib{address: address, client: c, localip: ip}
+	return Lib{Address: address, Client: c, Localip: ip}
 }
 
 func (l *Lib) Start(svcName string) error {
@@ -122,7 +121,7 @@ func (l *Lib) Start(svcName string) error {
 	// }
 	// opts := docker.CreateContainerOptions{Config: &config}
 
-	// container, err := l.client.CreateContainer(opts)
+	// container, err := l.Client.CreateContainer(opts)
 	// if err != nil {
 	// 	return err
 	// }
@@ -136,7 +135,7 @@ func (l *Lib) Start(svcName string) error {
 	// 	PortBindings: l.getPortBindings(ports),
 	// 	Links:        links,
 	// }
-	// err = l.client.StartContainer(container.ID, &hostConfig)
+	// err = l.Client.StartContainer(container.ID, &hostConfig)
 	// if err != nil {
 	// 	return err
 	// }
@@ -163,7 +162,7 @@ func (l *Lib) Stop(svcName string) error {
 	// 	return err
 	// }
 
-	// if err = l.client.StopContainer(id, 5); err != nil {
+	// if err = l.Client.StopContainer(id, 5); err != nil {
 	// 	return err
 	// }
 
@@ -189,7 +188,7 @@ func (l *Lib) startDeps(svcName string) error {
 }
 
 func (l *Lib) getContainerName(svcName string) (string, error) {
-	c, err := docker.NewClient(l.address)
+	c, err := docker.NewClient(l.Address)
 	if err != nil {
 		return "", err
 	}
@@ -247,7 +246,7 @@ func (l *Lib) getLinks(svcName string) ([]string, error) {
 
 func (l *Lib) getContainerID(name string) (string, error) {
 
-	conts, _ := l.client.ListContainers(docker.ListContainersOptions{})
+	conts, _ := l.Client.ListContainers(docker.ListContainersOptions{})
 	for _, cont := range conts {
 		for _, n := range cont.Names {
 			if n == name {
@@ -259,7 +258,7 @@ func (l *Lib) getContainerID(name string) (string, error) {
 }
 
 func (l *Lib) ListImages() {
-	imgs, _ := l.client.ListImages(false)
+	imgs, _ := l.Client.ListImages(false)
 	for _, img := range imgs {
 		// fmt.Println(len(img.RepoTags[0]))
 		// fmt.Print("%v\n\n"+ img)
@@ -279,9 +278,10 @@ func (l *Lib) ListImages() {
 func (l *Lib) RemoveContainers(ids []string) error {
 	for _, id := range ids {
 		color.Println("@bREMOVING: "+color.ResetCode, id)
-		err := l.client.RemoveContainer(docker.RemoveContainerOptions{ID: id})
+		err := l.Client.RemoveContainer(docker.RemoveContainerOptions{ID: id})
 		if err != nil {
 			color.Errorf("@rERROR: "+color.ResetCode, err)
+			log.Error(err)
 			return err
 		}
 	}
@@ -291,10 +291,11 @@ func (l *Lib) RemoveContainers(ids []string) error {
 
 func (l *Lib) StartContainer(id string) error {
 	color.Println("@bREMOVING: "+color.ResetCode, id)
-	err := l.client.StartContainer(id, nil)
+	err := l.Client.StartContainer(id, nil)
 	//.RemoveContainer(docker.RemoveContainerOptions{ID: id})
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return err
 	}
 	color.Println("Done")
@@ -304,9 +305,10 @@ func (l *Lib) StartContainer(id string) error {
 func (l *Lib) RemoveImages(ids []string) error {
 	for _, id := range ids {
 		color.Println("@bREMOVING: "+color.ResetCode, id)
-		err := l.client.RemoveImage(id)
+		err := l.Client.RemoveImage(id)
 		if err != nil {
 			color.Errorf("@rERROR: "+color.ResetCode, err)
+			log.Error(err)
 			return err
 		}
 	}
@@ -324,6 +326,7 @@ func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -333,6 +336,7 @@ func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 	// "unix", "/var/run/docker.sock")
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 	clientconn := httputil.NewClientConn(dial, nil)
@@ -341,12 +345,14 @@ func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 
 	outs := engine.NewTable("Created", 0)
 	if _, err := outs.ReadListFrom(body); err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 	var containers []APIContainers
@@ -390,6 +396,7 @@ func (l *Lib) GetImages() ([]APIImages, error) {
 
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -399,6 +406,7 @@ func (l *Lib) GetImages() ([]APIImages, error) {
 	// "unix", "/var/run/docker.sock")
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 	clientconn := httputil.NewClientConn(dial, nil)
@@ -407,12 +415,14 @@ func (l *Lib) GetImages() ([]APIImages, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 
 	outs := engine.NewTable("Created", 0)
 	if _, err := outs.ReadListFrom(body); err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 		return nil, err
 	}
 	var images []APIImages
@@ -447,10 +457,12 @@ func (l *Lib) Status() {
 	cont_run, err := l.GetContainers(false)
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 	}
 	cont_all, err := l.GetContainers(true)
 	if err != nil {
 		color.Errorf("@bERROR: "+color.ResetCode, err)
+		log.Error(err)
 	}
 
 	// // list running containers
@@ -479,6 +491,7 @@ func (l *Lib) Status() {
 	imgs_all, err := l.GetImages()
 	if err != nil {
 		color.Errorf("@bERROR: "+color.ResetCode, err)
+		log.Error(err)
 	}
 
 	imgs_good := 0
@@ -508,10 +521,12 @@ func (l *Lib) CleanContainers() []string {
 	cont_run, err := l.GetContainers(false)
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Error(err)
 	}
 	cont_all, err := l.GetContainers(true)
 	if err != nil {
 		color.Errorf("@bERROR: "+color.ResetCode, err)
+		log.Error(err)
 	}
 
 	// // list running containers
@@ -541,6 +556,7 @@ func (l *Lib) CleanImages() []string {
 	imgs_all, err := l.GetImages()
 	if err != nil {
 		color.Errorf("@bERROR: "+color.ResetCode, err)
+		log.Error(err)
 	}
 
 	var ids []string
@@ -555,9 +571,10 @@ func (l *Lib) CleanImages() []string {
 }
 
 func (l *Lib) BuildImage(name string) (string, error) {
-	// imgs_all, err := l.client.BuildImage(opts)
+	// imgs_all, err := l.Client.BuildImage(opts)
 	// if err != nil {
 	// 	color.Errorf("@bERROR: "+color.ResetCode, err)
+	//  log.Error(err)
 	// }
 
 	// var ids []string
