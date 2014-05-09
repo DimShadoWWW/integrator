@@ -477,9 +477,9 @@ func (l *Lib) Status() {
 		all.Add(cont.ID)
 	}
 
-	color.Println("@bContainers"+color.ResetCode+":", len(all),
-		"\t@rRunning"+color.ResetCode+":", len(running),
-		"@yStopped"+color.ResetCode+":", len(all.Difference(running)))
+	color.Println("@bContainers"+color.ResetCode+":", all.Cardinality(),
+		"\t@rRunning"+color.ResetCode+":", running.Cardinality(),
+		"@yStopped"+color.ResetCode+":", all.Difference(running).Cardinality())
 
 	t := termtable.NewTable(nil, nil)
 	t.SetHeader([]string{"ID", "Image", "status"})
@@ -541,11 +541,11 @@ func (l *Lib) CleanContainers() []string {
 		all.Add(cont.ID)
 	}
 
-	color.Println("@bContainers"+color.ResetCode+":", len(all),
-		"\t@rRunning"+color.ResetCode+":", len(running),
-		"@yStopped"+color.ResetCode+":", len(all.Difference(running)))
+	color.Println("@bContainers"+color.ResetCode+":", all.Cardinality(),
+		"\t@rRunning"+color.ResetCode+":", running.Cardinality(),
+		"@yStopped"+color.ResetCode+":", all.Difference(running).Cardinality())
 	var ids []string
-	for id, _ := range all.Difference(running) {
+	for id := range all.Difference(running).Iter() {
 		ids = append(ids, id.(string))
 	}
 	return ids
