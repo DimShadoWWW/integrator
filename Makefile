@@ -11,6 +11,8 @@ deps:
 	go get github.com/dotcloud/docker/utils
 	go get github.com/fsouza/go-dockerclient
 	go get github.com/stevedomin/termtable
+	go get github.com/coreos/locksmith/lock
+	go get github.com/coreos/go-etcd/etcd
 
 build:
 	go build
