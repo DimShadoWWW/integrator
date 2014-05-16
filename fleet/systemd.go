@@ -1,11 +1,14 @@
 package fleet
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 	"text/template"
-	// "reflect"
 )
 
 const (
@@ -14,35 +17,43 @@ const (
 Description={{.Description}}
 After=docker.service
 Requires=docker.service
-{{range .Deps}}
-After={{.}}.service
-Requires={{.}}.service
-{{end}}
-
+{{range .Deps}}After={{.}}.service
+Requires={{.}}.service{{end}}
+{{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
-ExecStart=/usr/bin/docker run --name {{.Name}}-{{.Id}} {{if .Hostname}}-h {{.Hostname}}.{{.Domain}}{{end}} {{if .Privileged}}--privileged{{end}} {{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range .Links}}{{.|linkExpand}}{{end}}{{end}} {{.ImageName}} {{.Command}}
-ExecStop=/usr/bin/docker stop {{.Name}}
+ExecStart=/usr/bin/docker run --name {{.Name|lower}}-{{.Id}}{{if .Hostname}} -h {{.Hostname|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range .Links}}{{.|linkExpand}}{{end}}{{end}} {{.ImageName}} {{.Command}}
+{{if .HttpPort}}
+ExecStartPost=/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
+ExecStartPost=/usr/bin/etcdctl set /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/type "io"
+ExecStartPost=/usr/bin/etcdctl set /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/value {{ printf "%s.%s" $hostname $domain}}
+ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s" $hostname $domain}}/{{$id}}/location '{ \"host\": \"%H\", \"port\": {{$httpport}} }'
 
-{{if .Conflicts}}
-[X-Fleet]
+{{else}}{{if .Ports}}{{range .Ports}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }'
+{{end}}{{else}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }'{{end}}{{end}}
+ExecStop=/usr/bin/docker stop {{.Name}}{{if .HttpPort}}
+
+ExecStopPost=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
+ExecStopPost=/usr/bin/etcdctl rm /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/type
+ExecStopPost=/usr/bin/etcdctl rm /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/value
+ExecStopPost=/usr/bin/etcdctl rmdir /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/
+
+{{else}}{{if .Ports}}{{range .Ports}}ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}}
+{{end}}ExecStopPost=/usr/bin/etcdctl rmdir /services/{{$hostname|lower}}.{{$domain|lower}}/{{$name}}-{{$id}}{{else}}
+ExecStopPost=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}{{end}}{{end}}
+
+{{if .Conflicts}}[X-Fleet]
 {{range .Conflicts}}
-X-Conflicts={{.}}.service
-{{end}}
-{{end}}
+X-Conflicts={{.}}.service{{end}}{{end}}
 `
 
 	service_discovery = `
 [Unit]
 Description={{.Description}} presence service
 BindsTo={{.Name}}.service
-
-{{$id := .Id}}
-{{$name := .Name}}
-{{$hostname := .Hostname}}
-{{$domain := .Domain}}
+{{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
-ExecStart=/bin/sh -c "while true; do {{if .Ports}}{{range .Ports}}etcdctl set /services/{{$hostname}}.{{$domain}}/{{$name}}-{{$id}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{.Priority}}\" }' --ttl 60;{{end}}{{end}}sleep 45;done"
-ExecStop=/usr/bin/etcdctl rm /services/{{$hostname}}.{{$domain}}/{{$name}}-{{$id}}
+ExecStart=/bin/sh -c "while true; do {{if .HttpPort}}/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{else}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{end}}sleep 45;done"
+ExecStop=/bin/sh -c "{{if .HttpPort}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}};{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}};{{end}}/usr/bin/etcdctl rmdir /services/{{$hostname|lower}}.{{$domain|lower}}/{{$name}}-{{$id}}{{else}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}{{end}}{{end}}"
 
 [X-Fleet]
 X-ConditionMachineOf={{.Name}}.service
@@ -50,27 +61,31 @@ X-ConditionMachineOf={{.Name}}.service
 )
 
 type Volume struct {
+	Id           int64
 	LocalDir     string
 	ContainerDir string
 }
 
 type Port struct {
+	Id            int64
 	HostPort      string
 	ContainerPort string
 	Protocol      string
 }
 
 type Link struct {
+	Id    int64
 	Name  string
 	Alias string
 }
 type Env struct {
+	Id    int64
 	Name  string
 	Value string
 }
 
 type SystemdService struct {
-	Id          string
+	Id          int64
 	Name        string
 	Description string
 	Command     string
@@ -84,6 +99,9 @@ type SystemdService struct {
 	Variables   []Env
 	Links       []Link
 	Privileged  bool
+	Priority    int
+	HttpPort    int
+	Region      string
 	// IncludeFleet bool
 }
 
@@ -91,16 +109,6 @@ func VolumeExpander(args ...interface{}) string {
 	line := ""
 	for _, i := range args {
 		j, _ := i.(Volume)
-
-		// ok := false
-		// var i Volume
-		// if len(args) == 1 {
-		// 	i, ok = args[0].(Volume)
-		// }
-		// if !ok {
-		// 	fmt.Println("failed")
-		// 	fmt.Sprint(args...)
-		// }
 
 		if j.LocalDir != "" && j.ContainerDir != "" {
 			line = line + fmt.Sprintf(" -v %s:%s", j.LocalDir, j.ContainerDir)
@@ -154,34 +162,70 @@ func VarExpander(args ...interface{}) string {
 	return line
 }
 
-func CreateSystemdFiles(system SystemdService, outdir string) {
+func Lower(args ...interface{}) string {
+	val, _ := args[0].(string)
+
+	return strings.ToLower(val)
+}
+
+func Dns2Path(args ...interface{}) string {
+	val, _ := args[0].(string)
+
+	hostpath := strings.Split(strings.ToLower(val), ".")
+	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
+		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]
+	}
+	path := strings.Join(hostpath, "/")
+
+	return path
+}
+
+func CreateSystemdFiles(system SystemdService, outdir string) []string {
 
 	t := template.New("Systemd service")
 	// add our function
-	t = t.Funcs(template.FuncMap{"volumeExpand": VolumeExpander, "portExpand": PortExpander, "linkExpand": LinkExpander, "varExpand": VarExpander})
-
+	t = t.Funcs(template.FuncMap{
+		"volumeExpand": VolumeExpander,
+		"portExpand":   PortExpander,
+		"linkExpand":   LinkExpander,
+		"varExpand":    VarExpander,
+		"lower":        Lower,
+		"dns2path":     Dns2Path,
+	})
 	t, err := t.Parse(service)
 	checkError(err)
 
-	f, err := os.Create(outdir + system.Name + "-" + system.Id + ".service")
+	fname := outdir + system.Name + "-" + strconv.FormatInt(system.Id, 10) + ".service"
+	f, err := os.Create(fname)
 	checkError(err)
 	defer f.Close()
-
-	fmt.Printf("%s\n", system)
 	err = t.Execute(io.Writer(f), system)
 	checkError(err)
-	fmt.Printf("%s\n", system.Volumes[0])
+	service_files := []string{fname}
 
-	t = template.New("Systemd discovery service")
-	t, err = t.Parse(service_discovery)
-	checkError(err)
+	// // service discovery
+	// t = template.New("Systemd discovery service")
+	// t = t.Funcs(template.FuncMap{
+	// 	"volumeExpand": VolumeExpander,
+	// 	"portExpand":   PortExpander,
+	// 	"linkExpand":   LinkExpander,
+	// 	"varExpand":    VarExpander,
+	// 	"lower":        Lower,
+	// 	"dns2path":     Dns2Path,
+	// })
+	// t, err = t.Parse(service_discovery)
+	// checkError(err)
 
-	f, err = os.Create(outdir + system.Name + "-" + system.Id + "-discovery.service")
-	checkError(err)
-	defer f.Close()
+	// fname = outdir + system.Name + "-" + strconv.FormatInt(system.Id, 10) + "-discovery.service"
+	// f, err = os.Create(fname)
+	// checkError(err)
+	// defer f.Close()
+	// service_files = append(service_files, fname)
 
-	err = t.Execute(io.Writer(f), system)
-	checkError(err)
+	// err = t.Execute(io.Writer(f), system)
+	// checkError(err)
+
+	return service_files
 }
 
 func checkError(err error) {
@@ -189,4 +233,38 @@ func checkError(err error) {
 		fmt.Println("Fatal error ", err.Error())
 		os.Exit(1)
 	}
+}
+
+func (q *SystemdService) FromJSON(file string) error {
+
+	//Reading JSON file
+	J, err := ioutil.ReadFile(file)
+	if err != nil {
+		panic(err)
+	}
+
+	var data = &q
+	//Umarshalling JSON into struct
+	return json.Unmarshal(J, data)
+}
+
+func (s *SystemdService) ToJSON(fname string) error {
+
+	ff, err := os.Create(fname)
+	if err != nil {
+		return err
+	}
+	t, err := json.MarshalIndent(s, "", " ")
+	if err != nil {
+		return err
+	}
+	n, err := io.WriteString(ff, string(t))
+	if err != nil {
+		fmt.Println(n)
+		return err
+	}
+
+	ff.Close()
+
+	return nil
 }
