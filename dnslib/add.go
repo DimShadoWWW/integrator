@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func AddHostnameDNS(client *etcdlib.EtcdClient, hostname string, ipaddress string, region string) error {
+func AddHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname string, ipaddress string, port int, region string) error {
 
 	return nil
 }

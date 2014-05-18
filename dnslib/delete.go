@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func DeleteHostnameDNS(client *etcdlib.EtcdClient, hostname, ipaddress string, port int) error {
+func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname, ipaddress string, port int, region string) error {
 	entry := DnsEntry{
 		Host: ipaddress,
 		Port: port,
