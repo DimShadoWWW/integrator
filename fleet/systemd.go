@@ -21,23 +21,14 @@ Requires=docker.service
 Requires={{.}}.service{{end}}
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
-ExecStart=/usr/bin/docker run --name {{.Name|lower}}-{{.Id}}{{if .Hostname}} -h {{.Hostname|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range .Links}}{{.|linkExpand}}{{end}}{{end}} {{.ImageName}} {{.Command}}
-{{if .HttpPort}}
+ExecStart=/bin/bash -c '/usr/bin/docker start -a {{.Name|lower}} || /usr/bin/docker run --name {{.Name|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range .Links}}{{.|linkExpand}}{{end}}{{end}} {{.ImageName}} {{.Command}}'
+{{if .HttpPort}}ExecStartPost=/home/core/proxyctl -cmd=add -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}
 ExecStartPost=/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
-ExecStartPost=/usr/bin/etcdctl set /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/type "io"
-ExecStartPost=/usr/bin/etcdctl set /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/value {{ printf "%s.%s" $hostname $domain}}
-ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s" $hostname $domain}}/{{$id}}/location '{ \"host\": \"%H\", \"port\": {{$httpport}} }'
-
-{{else}}{{if .Ports}}{{range .Ports}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }'
-{{end}}{{else}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }'{{end}}{{end}}
-ExecStop=/usr/bin/docker stop {{.Name}}{{if .HttpPort}}
-
+{{else}}{{if .Ports}}{{range .Ports}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }'
+{{end}}{{else}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }'{{end}}{{end}}
+ExecStop=/usr/bin/docker kill {{.Name|lower}}{{if .HttpPort}}
 ExecStopPost=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
-ExecStopPost=/usr/bin/etcdctl rm /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/type
-ExecStopPost=/usr/bin/etcdctl rm /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/value
-ExecStopPost=/usr/bin/etcdctl rmdir /domain/{{ printf "%s.%s.%s" $region $hostname $domain}}/
-
-{{else}}{{if .Ports}}{{range .Ports}}ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}}
+ExecStopPost=/home/core/proxyctl -cmd=del -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}{{else}}{{if .Ports}}{{range .Ports}}ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}}
 {{end}}ExecStopPost=/usr/bin/etcdctl rmdir /services/{{$hostname|lower}}.{{$domain|lower}}/{{$name}}-{{$id}}{{else}}
 ExecStopPost=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}{{end}}{{end}}
 
@@ -52,7 +43,7 @@ Description={{.Description}} presence service
 BindsTo={{.Name}}.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
-ExecStart=/bin/sh -c "while true; do {{if .HttpPort}}/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{else}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}-{{$id}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{end}}sleep 45;done"
+ExecStart=/bin/sh -c "while true; do {{if .HttpPort}}/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{else}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{end}}sleep 45;done"
 ExecStop=/bin/sh -c "{{if .HttpPort}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}};{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}};{{end}}/usr/bin/etcdctl rmdir /services/{{$hostname|lower}}.{{$domain|lower}}/{{$name}}-{{$id}}{{else}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}{{end}}{{end}}"
 
 [X-Fleet]
@@ -195,7 +186,7 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 	t, err := t.Parse(service)
 	checkError(err)
 
-	fname := outdir + system.Name + "-" + strconv.FormatInt(system.Id, 10) + ".service"
+	fname := outdir + strings.Replace(system.Name, "{{ID}}", strconv.FormatInt(system.Id, 10), -1) + ".service"
 	f, err := os.Create(fname)
 	checkError(err)
 	defer f.Close()

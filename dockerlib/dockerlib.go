@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"strconv"
 	"strings"
 	"time"
 	// "net/url"
@@ -203,6 +204,126 @@ func (l *Lib) getContainerName(svcName string) (string, error) {
 	return container.Name, nil
 }
 
+func (l *Lib) GetContainerPorts(svcName string) (map[docker.Port][]docker.PortBinding, error) {
+	c, err := docker.NewClient(l.Address)
+	if err != nil {
+		return nil, err
+	}
+	id, err := l.getContainerID(svcName)
+	if err != nil {
+		return nil, err
+	}
+	container, err := c.InspectContainer(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return container.NetworkSettings.Ports, nil
+}
+
+func (l *Lib) GetContainerTcpPort(svcName string, port int) (string, error) {
+	c, err := docker.NewClient(l.Address)
+	if err != nil {
+		return "", err
+	}
+	id, err := l.getContainerID(svcName)
+	if err != nil {
+		return "", err
+	}
+	container, err := c.InspectContainer(id)
+	if err != nil {
+		return "", err
+	}
+
+	for k, p := range container.NetworkSettings.Ports {
+		if k.Proto() == "tcp" {
+			cport, err := strconv.Atoi(k.Port())
+			if err != nil {
+				return "", err
+			}
+			if cport == port {
+				return p[0].HostPort, nil
+			}
+
+		}
+	}
+
+	return "", Error("Tcp port not found in container")
+}
+
+func (l *Lib) GetContainerCheckOpenPort(svcName string, port int) (bool, error) {
+	c, err := docker.NewClient(l.Address)
+	if err != nil {
+		return false, err
+	}
+	id, err := l.getContainerID(svcName)
+	if err != nil {
+		return false, err
+	}
+	container, err := c.InspectContainer(id)
+	if err != nil {
+		return false, err
+	}
+
+	for k, _ := range container.NetworkSettings.Ports {
+		cport, err := strconv.Atoi(k.Port())
+		if err != nil {
+			return false, err
+		}
+		if cport == port {
+			return true, nil
+		}
+	}
+
+	return false, Error("Port not open in container")
+}
+
+func (l *Lib) GetContainerUdpPort(svcName string, port int) (string, error) {
+	c, err := docker.NewClient(l.Address)
+	if err != nil {
+		return "", err
+	}
+	id, err := l.getContainerID(svcName)
+	if err != nil {
+		return "", err
+	}
+	container, err := c.InspectContainer(id)
+	if err != nil {
+		return "", err
+	}
+
+	for k, p := range container.NetworkSettings.Ports {
+		if k.Proto() == "udp" {
+			cport, err := strconv.Atoi(k.Port())
+			if err != nil {
+				return "", err
+			}
+			if cport == port {
+				return p[0].HostPort, nil
+			}
+
+		}
+	}
+
+	return "", Error("Udp port not found in container")
+}
+func (l *Lib) GetContainerIpaddress(svcName string) (string, error) {
+	c, err := docker.NewClient(l.Address)
+	if err != nil {
+		return "", err
+	}
+	id, err := l.getContainerID(svcName)
+	if err != nil {
+		return "", err
+	}
+	container, err := c.InspectContainer(id)
+	if err != nil {
+		return "", err
+	}
+
+	return container.NetworkSettings.IPAddress, nil
+}
+
 func (l *Lib) getPortBindings(ports map[string]string) map[docker.Port][]docker.PortBinding {
 	portBindings := make(map[docker.Port][]docker.PortBinding)
 
@@ -249,7 +370,7 @@ func (l *Lib) getContainerID(name string) (string, error) {
 	conts, _ := l.Client.ListContainers(docker.ListContainersOptions{})
 	for _, cont := range conts {
 		for _, n := range cont.Names {
-			if n == name {
+			if n == "/"+name {
 				return cont.ID, nil
 			}
 		}
