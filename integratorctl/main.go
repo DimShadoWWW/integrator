@@ -137,8 +137,8 @@ func main() {
 		Ports:       vuports,
 		Volumes:     vuvolumes,
 		Domain:      "local",
-		HttpPort:    80,
 		Region:      "east",
+		Conflicts:   []string{"vulcand*"},
 		// Variables:   []string,
 		// IncludeFleet bool
 	}
@@ -218,7 +218,6 @@ func main() {
 	myServices = append(myServices, f)
 
 	deploy_all = true
-	// deploy_all = false
 
 	// // logspout
 	// v1 := fleet.Volume{LocalDir: "/var/run/docker.sock", ContainerDir: "/tmp/docker.sock"}

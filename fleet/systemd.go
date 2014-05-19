@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	service = `
-[Unit]
+	service = `[Unit]
 Description={{.Description}}
 After=docker.service
 Requires=docker.service
@@ -23,21 +22,43 @@ Requires={{.}}.service{{end}}
 [Service]
 TimeoutStartSec=0
 ExecStart=/bin/bash -c '/usr/bin/docker start -a {{.Name|lower}} || /usr/bin/docker run --name {{.Name|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range .Links}}{{.|linkExpand}}{{end}}{{end}} {{.ImageName}} {{.Command}}'
-{{if .HttpPort}}ExecStartPost=/home/core/proxyctl -cmd=add -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}
-ExecStartPost=/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
-{{else}}{{if .Ports}}{{range .Ports}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }'
-{{end}}{{else}}ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }'{{end}}{{end}}
-ExecStop=/usr/bin/docker kill {{.Name|lower}}{{if .HttpPort}}
-ExecStopPost=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
-ExecStopPost=/home/core/proxyctl -cmd=del -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}{{else}}{{if .Ports}}{{range .Ports}}ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}}
-{{end}}ExecStopPost=/usr/bin/etcdctl rmdir /services/{{$hostname|lower}}.{{$domain|lower}}/{{$name}}-{{$id}}{{else}}
-ExecStopPost=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}{{end}}{{end}}
+ExecStop=/bin/bash -c '/usr/bin/docker stop {{.Name|lower}};/usr/bin/docker rm {{.Name|lower}}'
+
 
 {{if .Conflicts}}[X-Fleet]
 {{range .Conflicts}}
 X-Conflicts={{.}}.service{{end}}{{end}}
 `
 
+	dns_service = `[Unit]
+Description={{.Description}} presence service
+BindsTo={{.Name}}.service
+After={{.Name}}.service
+{{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
+[Service]
+TimeoutStartSec=0
+ExecStart=/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
+ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
+ExecStop=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
+ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
+
+[X-Fleet]
+X-ConditionMachineOf={{.Name}}.service
+`
+	proxy_service = `[Unit]
+Description={{.Description}} presence service
+BindsTo={{.Name}}-dns.service
+After={{.Name}}-dns.service
+
+{{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
+[Service]
+TimeoutStartSec=0
+ExecStart=/home/core/proxyctl -cmd=add -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}
+ExecStop=/home/core/proxyctl -cmd=del -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}
+
+[X-Fleet]
+X-ConditionMachineOf={{.Name}}.service
+`
 	service_discovery = `
 [Unit]
 Description={{.Description}} presence service
@@ -195,27 +216,52 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 	checkError(err)
 	service_files := []string{fname}
 
-	// // service discovery
-	// t = template.New("Systemd discovery service")
-	// t = t.Funcs(template.FuncMap{
-	// 	"volumeExpand": VolumeExpander,
-	// 	"portExpand":   PortExpander,
-	// 	"linkExpand":   LinkExpander,
-	// 	"varExpand":    VarExpander,
-	// 	"lower":        Lower,
-	// 	"dns2path":     Dns2Path,
-	// })
-	// t, err = t.Parse(service_discovery)
-	// checkError(err)
+	// dns
+	t = template.New("Systemd dns service")
+	t = t.Funcs(template.FuncMap{
+		"volumeExpand": VolumeExpander,
+		"portExpand":   PortExpander,
+		"linkExpand":   LinkExpander,
+		"varExpand":    VarExpander,
+		"lower":        Lower,
+		"dns2path":     Dns2Path,
+	})
+	t, err = t.Parse(dns_service)
+	checkError(err)
 
-	// fname = outdir + system.Name + "-" + strconv.FormatInt(system.Id, 10) + "-discovery.service"
-	// f, err = os.Create(fname)
-	// checkError(err)
-	// defer f.Close()
-	// service_files = append(service_files, fname)
+	fname = outdir + strings.Replace(system.Name, "{{ID}}", strconv.FormatInt(system.Id, 10), -1) + "-dns.service"
+	f, err = os.Create(fname)
+	checkError(err)
+	defer f.Close()
+	service_files = append(service_files, fname)
 
-	// err = t.Execute(io.Writer(f), system)
-	// checkError(err)
+	err = t.Execute(io.Writer(f), system)
+	checkError(err)
+	fmt.Println(system.Name)
+
+	// enable proxy only if httport > 0
+	if system.HttpPort > 0 {
+		t = template.New("Systemd proxy service")
+		t = t.Funcs(template.FuncMap{
+			"volumeExpand": VolumeExpander,
+			"portExpand":   PortExpander,
+			"linkExpand":   LinkExpander,
+			"varExpand":    VarExpander,
+			"lower":        Lower,
+			"dns2path":     Dns2Path,
+		})
+		t, err = t.Parse(proxy_service)
+		checkError(err)
+
+		fname = outdir + strings.Replace(system.Name, "{{ID}}", strconv.FormatInt(system.Id, 10), -1) + "-proxy.service"
+		f, err = os.Create(fname)
+		checkError(err)
+		defer f.Close()
+		service_files = append(service_files, fname)
+
+		err = t.Execute(io.Writer(f), system)
+		checkError(err)
+	}
 
 	return service_files
 }
