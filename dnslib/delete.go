@@ -3,30 +3,37 @@ package dnslib
 import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/etcdlib"
+	"strconv"
 	"strings"
 )
 
-func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname, ipaddress string, port int, region string) error {
-	entry := DnsEntry{
-		Host: ipaddress,
-		Port: port,
-	}
-	hostpath := strings.Split(hostname, ".")
+func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname string, domain string, port int, region string) error {
+
+	internal_domain := "docker" // region used for
+
+	out_hostname := region + "." + hostname + "." + domain
+	in_hostname := region + "." + hostname + "." + internal_domain + "." + domain
+
+	// Docker internal ip address
+
+	hostpath := strings.Split(strconv.FormatInt(id, 10)+"."+in_hostname, ".")
 	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
 		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]
 	}
+
 	host := DnsHost{
-		Hostname: hostname,
+		Hostname: strconv.FormatInt(id, 10) + "." + in_hostname,
 		EtcdKey:  "/skydns/" + strings.Join(hostpath, "/"),
-		Entry:    []DnsEntry{entry},
+		Entry:    []DnsEntry{},
 	}
 
+	fmt.Println("Remove ", host.EtcdKey)
 	if _, err := client.Client.Delete(host.EtcdKey, true); err != nil {
-		return fmt.Errorf("Host not found: %s", hostname)
+		fmt.Println(err)
 	}
 
 	hostpath = strings.Split(host.EtcdKey, "/")
-	for i := 0; i < len(hostpath); i++ {
+	for i := 1; i < len(hostpath); i++ {
 		local_path := "/" + strings.Join(hostpath[0:len(hostpath)-i], "/")
 		response, err := client.Client.Get(local_path, false, false)
 		if etcdlib.NotFound(err) {
@@ -34,9 +41,39 @@ func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname, ipaddress
 			// return nil
 		} else {
 			if etcdlib.IsEmptyDir(response.Node) {
+				fmt.Println("Remove ", response.Node.Key)
 				client.Client.Delete(response.Node.Key, true)
-			} else {
-				return nil
+			}
+		}
+	}
+
+	hostpath = strings.Split(strconv.FormatInt(id, 10)+"."+out_hostname, ".")
+	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
+		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]
+	}
+
+	host = DnsHost{
+		Hostname: strconv.FormatInt(id, 10) + "." + out_hostname,
+		EtcdKey:  "/skydns/" + strings.Join(hostpath, "/"),
+		Entry:    []DnsEntry{},
+	}
+
+	fmt.Println("Remove ", host.EtcdKey)
+	if _, err := client.Client.Delete(host.EtcdKey, true); err != nil {
+		return fmt.Errorf("Host not found: %s", hostname)
+	}
+
+	hostpath = strings.Split(host.EtcdKey, "/")
+	for i := 1; i < len(hostpath); i++ {
+		local_path := "/" + strings.Join(hostpath[0:len(hostpath)-i], "/")
+		response, err := client.Client.Get(local_path, false, false)
+		if etcdlib.NotFound(err) {
+			fmt.Printf("Key error: %s", err)
+			// return nil
+		} else {
+			if etcdlib.IsEmptyDir(response.Node) {
+				fmt.Println("Remove ", response.Node.Key)
+				client.Client.Delete(response.Node.Key, true)
 			}
 		}
 	}
