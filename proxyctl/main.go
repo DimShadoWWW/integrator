@@ -9,7 +9,6 @@ import (
 	"github.com/DimShadoWWW/integrator/proxyctl/vulcand"
 	"os"
 	"strings"
-	"time"
 )
 
 func main() {
@@ -43,11 +42,6 @@ func main() {
 
 		switch {
 		case *command == "add" || *command == "Add":
-
-			// if add, wait 10 seconds for the container to start
-			// without this, sometimes the container inspect failed
-			time.Sleep(10 * time.Second)
-
 			switch {
 			case *proxytype == "vulcand":
 				err = vulcand.VulcandHostAdd(client, *docker, f, *port, *path)

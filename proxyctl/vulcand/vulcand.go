@@ -24,9 +24,21 @@ func VulcandHostAdd(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 
 	dockerclient := dockerlib.NewDockerLib(dockeruri)
 
-	ipaddress, err := dockerclient.GetContainerIpaddress(service.Hostname + "-" + strconv.FormatInt(service.Id, 10))
-	if err != nil {
-		return err
+	var ipaddress string
+	var err error
+
+	for i := 0; i < 10; i++ {
+		ipaddress, err = dockerclient.GetContainerIpaddress(service.Hostname + "-" + strconv.FormatInt(service.Id, 10))
+		if err != nil {
+			// retry until this
+			if i == 9 {
+				return err
+			}
+		} else {
+			break
+		}
+		// wait 10 seconds to try again
+		time.Sleep(10 * time.Second)
 	}
 
 	// look for location..
