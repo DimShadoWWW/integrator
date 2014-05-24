@@ -2,9 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/DimShadoWWW/integrator/etcdlib"
 	"github.com/DimShadoWWW/integrator/fleet"
-	"github.com/DimShadoWWW/integrator/proxyctl/gogeta"
 	"github.com/DimShadoWWW/integrator/proxyctl/vulcand"
 	"github.com/alecthomas/kingpin"
 	"os"
@@ -36,11 +34,6 @@ func main() {
 
 		fmt.Printf("%s\n", machines)
 
-		client, err := etcdlib.NewEtcdClient(machines)
-		if err != nil {
-			fmt.Printf("Etcd: %s\n", err)
-		}
-
 		id, err := strconv.ParseInt(*Id, 10, 64)
 		if err != nil {
 			fmt.Printf("id conversion errorr: %s\n", err)
@@ -57,17 +50,7 @@ func main() {
 		switch {
 		case *proxytype == "vulcand":
 			for {
-				err = vulcand.VulcandHostAdd(client, *docker, f, *Port, *Path)
-				if err != nil {
-					fmt.Printf("Proxy addition failed: %s\n", err)
-					fmt.Fprintln(os.Stderr, err)
-					os.Exit(1)
-				}
-				time.Sleep(10 * time.Second)
-			}
-		case *proxytype == "gogeta":
-			for {
-				err = gogeta.GogetaHostAdd(client, *docker, f, *Port)
+				err = vulcand.VulcandHostAdd(machines, *docker, f, *Port, *Path)
 				if err != nil {
 					fmt.Printf("Proxy addition failed: %s\n", err)
 					fmt.Fprintln(os.Stderr, err)
@@ -82,11 +65,6 @@ func main() {
 	case "del":
 		machines := []string{"http://" + string(*serverIP) + ":4001"}
 
-		client, err := etcdlib.NewEtcdClient(machines)
-		if err != nil {
-			fmt.Printf("Etcd: %s\n", err)
-		}
-
 		id, err := strconv.ParseInt(*Id, 10, 64)
 		if err != nil {
 			fmt.Printf("id conversion errorr: %s\n", err)
@@ -102,20 +80,12 @@ func main() {
 
 		switch {
 		case *proxytype == "vulcand":
-			err = vulcand.VulcandHostDel(client, *docker, f, *Port)
+			err = vulcand.VulcandHostDel(machines, *docker, f, *Port, *Path)
 			if err != nil {
 				fmt.Printf("Proxy deletion failed: %s\n", err)
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(2)
 			}
-		case *proxytype == "gogeta":
-			err = gogeta.GogetaHostDel(client, f)
-			if err != nil {
-				fmt.Printf("Proxy deletion failed: %s\n", err)
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(2)
-			}
-
 		default:
 			fmt.Println("Proxy type not supported")
 			os.Exit(3)

@@ -17,11 +17,13 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 	out_hostname := region + "." + hostname + "." + domain
 	in_hostname := region + "." + hostname + "." + internal_domain + "." + domain
 
-	dockerclient := dockerlib.NewDockerLib(dockeruri)
+	dockerclient, err := dockerlib.NewDockerLib(dockeruri)
+	if err != nil {
+		return err
+	}
 
 	// Docker internal ip address
 	var ipaddress string
-	var err error
 
 	for i := 0; i < 10; i++ {
 		ipaddress, err = dockerclient.GetContainerIpaddress(hostname + "-" + strconv.FormatInt(id, 10))

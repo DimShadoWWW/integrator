@@ -73,18 +73,18 @@ type APIContainers struct {
 	Privileged bool
 }
 
-func NewDockerLib(address string) Lib {
+func NewDockerLib(address string) (Lib, error) {
 	c, err := docker.NewClient(address)
 	if err != nil {
-		panic(err)
+		return Lib{}, err
 	}
 
 	ip, err := GetLocalIp("8.8.8.8:53")
 	if err != nil {
-		panic(err)
+		return Lib{}, err
 	}
 
-	return Lib{Address: address, Client: c, Localip: ip}
+	return Lib{Address: address, Client: c, Localip: ip}, nil
 }
 
 func (l *Lib) Start(svcName string) error {

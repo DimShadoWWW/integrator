@@ -86,7 +86,10 @@ func main() {
 	color.Println(address)
 	color.Println(port)
 
-	client = dockerlib.NewDockerLib(address)
+	client, err = dockerlib.NewDockerLib(address)
+	if err != nil {
+		panic(err)
+	}
 
 	checkHeaderThenServe := func(h http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {

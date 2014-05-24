@@ -17,7 +17,10 @@ type GogetaHostJSON struct {
 
 func GogetaHostAdd(client *etcdlib.EtcdClient, dockeruri string, service fleet.SystemdService, port int) error {
 
-	dockerclient := dockerlib.NewDockerLib(dockeruri)
+	dockerclient, err := dockerlib.NewDockerLib(dockeruri)
+	if err != nil {
+		return err
+	}
 
 	ipaddress, err := dockerclient.GetContainerIpaddress(service.Hostname + "-" + strconv.FormatInt(service.Id, 10))
 	if err != nil {
