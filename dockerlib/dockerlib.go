@@ -1,10 +1,6 @@
 package dockerlib
 
 import (
-	// "errors"
-	// "encoding/json"
-	// "fmt"
-	// "github.com/dotcloud/docker/utils"
 	"github.com/deckarep/golang-set"
 	"github.com/dotcloud/docker/engine"
 	"github.com/dotcloud/docker/nat"
@@ -19,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	// "net/url"
 )
 import log "github.com/cihub/seelog"
 
@@ -83,21 +78,12 @@ func NewDockerLib(address string) Lib {
 	if err != nil {
 		panic(err)
 	}
-	ifs, err := net.Interfaces()
+
+	ip, err := GetLocalIp("8.8.8.8:53")
 	if err != nil {
 		panic(err)
 	}
-	var ip string
-	ip = "aa"
-	for _, v := range ifs {
-		if v.Name != "lo" {
-			addrs, _ := v.Addrs()
-			if len(addrs) == 0 {
-				continue
-			}
-			ip = addrs[0].String()
-		}
-	}
+
 	return Lib{Address: address, Client: c, Localip: ip}
 }
 
@@ -707,4 +693,14 @@ func (l *Lib) BuildImage(name string) (string, error) {
 
 	// color.Println("To remove: @r", len(ids), color.ResetCode, " images")
 	return "", nil
+}
+
+func GetLocalIp(server string) (string, error) {
+	conn, err := net.Dial("udp", server)
+	if err != nil {
+		return "", err
+	}
+
+	// conn.LocalAddr().String() returns ip_address:port
+	return net.ParseIP(strings.Split(conn.LocalAddr().String(), ":")[0]).String(), nil
 }
