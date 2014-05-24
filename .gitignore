@@ -21,3 +21,7 @@ _testmain.go
 
 config.json
 integrator
+dnsctl/dnsctl
+proxyctl/proxyctl
+integratorctl/integratorctl
+*.sqlite3
