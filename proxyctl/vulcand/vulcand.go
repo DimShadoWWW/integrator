@@ -234,26 +234,6 @@ func VulcandHostDel(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 							}
 						}
 
-						// echo etcdctl rm $i/path          # remove path
-						// etcdctl rm $i/path          # remove path
-						// echo etcdctl rm $i/upstream      # remove upstream id from host's locations
-						// etcdctl rm $i/upstream      # remove upstream id from host's locations
-
-						// echo etcdctl rmdir $i            # try to remove host's locations
-						// etcdctl rmdir $i            # try to remove host's locations
-						// echo etcdctl rmdir $j            # try to remove upstream's endpoints
-						// etcdctl rmdir $j            # try to remove upstream's endpoints
-
-						// echo etcdctl rmdir $(dirname $j) # remove upstream id
-						// etcdctl rmdir $(dirname $j) # remove upstream id
-						// echo etcdctl rmdir $(dirname $i) # remove host locations
-						// etcdctl rmdir $(dirname $i) # remove host locations
-
-						// echo etcdctl rmdir $(dirname $(dirname $j)) # remove upstream
-						// etcdctl rmdir $(dirname $(dirname $j)) # remove upstream
-						// echo etcdctl rmdir $(dirname $(dirname $i)) # remove host
-						// etcdctl rmdir $(dirname $(dirname $i)) # remove host
-
 						return nil
 					}
 				}
@@ -265,32 +245,6 @@ func VulcandHostDel(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 		}
 	}
 	return errors.New("Endpoint not found")
-
-	// _, err := client.Client.Delete("/services/"+service.Hostname+"."+service.Domain+"/"+strconv.FormatInt(service.Id, 10), true)
-	// if err != nil {
-	// 	fmt.Printf("Error: %s\n", err)
-	// 	return err
-	// }
-
-	// response, err := client.Client.Get("/services/"+service.Hostname+"."+service.Domain, false, false)
-	// if etcdlib.NotFound(err) {
-	// 	fmt.Printf("Services not found: %s\n", err)
-	// 	return err
-
-	// } else {
-	// 	if etcdlib.IsEmptyDir(response.Node) {
-	// 		client.Client.Delete(response.Node.Key, false)
-	// 		_, err = client.Client.Delete("/domains/"+service.Hostname+"."+service.Domain, true)
-	// 		if err != nil {
-	// 			fmt.Printf("Can not delete domain: %s\n", err)
-	// 			return err
-	// 		}
-	// 	}
-
-	// 	return nil
-	// }
-
-	// return nil
 }
 
 func createUpstream(client *etcdlib.EtcdClient) (string, error) {
