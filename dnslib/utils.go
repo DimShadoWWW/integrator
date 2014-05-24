@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func getLocalIp(server string) (string, error) {
+func GetLocalIp(server string) (string, error) {
 	conn, err := net.Dial("udp", server)
 	if err != nil {
 		return "", err

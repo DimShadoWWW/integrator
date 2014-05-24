@@ -6,6 +6,7 @@ import (
 	"github.com/DimShadoWWW/integrator/etcdlib"
 	"github.com/alecthomas/kingpin"
 	"os"
+	"time"
 )
 
 var (
@@ -32,7 +33,13 @@ func main() {
 
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case "add":
-		dnslib.AddHostnameDNS(client, *docker, *id, *hostname, *domain, *port, *region, *priority)
+		for {
+			err := dnslib.AddHostnameDNS(client, *docker, *id, *hostname, *domain, *port, *region, *priority)
+			if err != nil {
+
+			}
+			time.Sleep(10 * time.Second)
+		}
 	case "del":
 		dnslib.DeleteHostnameDNS(client, *id, *hostname, *domain, *port, *region)
 	default:

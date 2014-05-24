@@ -60,12 +60,12 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 	}
 
 	fmt.Println("Add ", host.EtcdKey)
-	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 0); err != nil {
+	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 20); err != nil {
 		return err
 	}
 
 	// Add CoreOS's node external ip address to hostname with region
-	out_ipaddress, err := getLocalIp("8.8.8.8:53")
+	out_ipaddress, err := GetLocalIp("8.8.8.8:53")
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 	}
 
 	fmt.Println("Add ", host.EtcdKey)
-	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 0); err != nil {
+	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 20); err != nil {
 		return err
 	}
 	return nil
