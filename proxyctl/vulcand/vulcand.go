@@ -4,16 +4,20 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DimShadoWWW/integrator/dockerlib"
+	"github.com/DimShadoWWW/integrator/etcdlib"
 	"github.com/DimShadoWWW/integrator/fleet"
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/mailgun/vulcand/backend"
 	"github.com/mailgun/vulcand/backend/etcdbackend"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var (
-	ipaddress string
+	ipaddress        string
+	toclean_etcdpath []string
 )
 
 type VulcandHostJSON struct {
@@ -119,7 +123,23 @@ func VulcandHostDel(etcdnodes []string, dockeruri string, service fleet.SystemdS
 	fullname := service.Hostname + "." + service.Domain
 	fmt.Println(fullname)
 
-	ipaddress := "127.0.0.1"
+	dockerclient, err := dockerlib.NewDockerLib(dockeruri)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < 10; i++ {
+		ipaddress, err = dockerclient.GetContainerIpaddress(service.Hostname + "-" + strconv.FormatInt(service.Id, 10))
+		if err != nil {
+			if i == 9 {
+				return err
+			}
+		} else {
+			break
+		}
+		// wait 10 seconds to try again
+		time.Sleep(10 * time.Second)
+	}
 
 	client, err := etcdbackend.NewEtcdBackend(etcdnodes, "vulcand", "STRONG")
 	if err != nil {
@@ -152,6 +172,9 @@ func VulcandHostDel(etcdnodes []string, dockeruri string, service fleet.SystemdS
 				upstreamId = location.Upstream.Id
 				for _, endpoint := range location.Upstream.Endpoints {
 					if endpoint.Url == "http://"+ipaddress+":"+strconv.Itoa(port) {
+						toclean_etcdpath = append(toclean_etcdpath, location.EtcdKey)
+						toclean_etcdpath = append(toclean_etcdpath, location.Upstream.EtcdKey)
+						toclean_etcdpath = append(toclean_etcdpath, endpoint.EtcdKey)
 						endpointId = endpoint.Id
 						fmt.Println(endpoint.Stats)
 						break
@@ -186,6 +209,27 @@ func VulcandHostDel(etcdnodes []string, dockeruri string, service fleet.SystemdS
 		if err != nil {
 			return err
 		}
+	}
+
+	etcdclient := etcd.NewClient(etcdnodes)
+
+	for _, key := range toclean_etcdpath {
+		key_sp := strings.Split(key, "/")
+		c := len(key_sp)
+		for i := 0; i < c; i++ {
+			k := strings.Join(key_sp[0:c-i], "/")
+			fmt.Println(k)
+			req, err := etcdclient.Get(k, false, false)
+			if err == nil {
+				if req.Node.Dir {
+					if etcdlib.IsEmptyDir(req.Node) {
+						etcdclient.DeleteDir(req.Node.Key)
+					}
+				}
+			}
+
+		}
+
 	}
 
 	return nil
