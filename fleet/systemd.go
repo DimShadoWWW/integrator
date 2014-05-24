@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -15,61 +14,60 @@ const (
 	service = `[Unit]
 Description={{.Description}}
 After=docker.service
-Requires=docker.service
-{{range .Deps}}After={{.}}.service
-Requires={{.}}.service{{end}}
-{{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
+Requires=docker.service{{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
+{{range $index, $element := .Deps}}After={{replaceId $element $id}}.service
+Requires={{replaceId $element $id}}.service{{end}}
+
 [Service]
 TimeoutStartSec=0
-ExecStart=/bin/bash -c '/usr/bin/docker start -a {{.Name|lower}} || /usr/bin/docker run --name {{.Name|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range .Links}}{{.|linkExpand}}{{end}}{{end}} {{.ImageName}} {{.Command}}'
-ExecStop=/bin/bash -c '/usr/bin/docker stop {{.Name|lower}};/usr/bin/docker rm {{.Name|lower}}'
+ExecStart=/bin/bash -c '/usr/bin/docker start -a {{replaceId .Name .Id|lower}} || /usr/bin/docker run --name {{replaceId .Name .Id|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range $index, $element := .Links}}{{linkExpand $element $id}}{{end}}{{end}} {{.ImageName}} {{.Command}}'
+ExecStop=/bin/bash -c '/usr/bin/docker stop {{replaceId .Name .Id|lower}};/usr/bin/docker rm {{replaceId .Name .Id|lower}}'
 
 
 {{if .Conflicts}}[X-Fleet]
-{{range .Conflicts}}
-X-Conflicts={{.}}.service{{end}}{{end}}
+{{range $index, $element := .Conflicts}}
+X-Conflicts={{replaceId $element $id}}.service{{end}}{{end}}
 `
 
 	dns_service = `[Unit]
 Description={{.Description}} presence service
-BindsTo={{.Name}}.service
-After={{.Name}}.service
+BindsTo={{replaceId .Name .Id}}.service
+After={{replaceId .Name .Id}}.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
 TimeoutStartSec=0
-ExecStart=/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
+ExecStart=/home/core/dnsctl --hostname={{.Hostname}} --domain={{.Domain}} --region={{.Region}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} add
 ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
-ExecStop=/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
+ExecStop=/home/core/dnsctl --hostname={{.Hostname}} --domain={{.Domain}} --region={{.Region}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} del
 ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
 
 [X-Fleet]
-X-ConditionMachineOf={{.Name}}.service
+X-ConditionMachineOf={{replaceId .Name .Id}}.service
 `
 	proxy_service = `[Unit]
 Description={{.Description}} presence service
-BindsTo={{.Name}}-dns.service
-After={{.Name}}-dns.service
-
+BindsTo={{replaceId .Name .Id}}-dns.service
+After={{replaceId .Name .Id}}-dns.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
 TimeoutStartSec=0
-ExecStart=/home/core/proxyctl -cmd=add -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}
-ExecStop=/home/core/proxyctl -cmd=del -hostname={{$hostname}} -domain={{$domain}} -id={{$id}} -port={{$httpport}}
+ExecStart=/home/core/proxyctl --id={{$id}} --hostname={{$hostname}} --domain={{$domain}} --region={{$region}} --port={{$httpport}} add
+ExecStop=/home/core/proxyctl --id={{$id}} --hostname={{$hostname}} --domain={{$domain}} --region={{$region}} --port={{$httpport}} del
 
 [X-Fleet]
-X-ConditionMachineOf={{.Name}}.service
+X-ConditionMachineOf={{replaceId .Name .Id}}-dns.service
 `
 	service_discovery = `
 [Unit]
 Description={{.Description}} presence service
-BindsTo={{.Name}}.service
+BindsTo={{replaceId .Name .Id}}.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
 ExecStart=/bin/sh -c "while true; do {{if .HttpPort}}/usr/bin/etcdctl set /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}}/{{.HostPort}} '{ \"Host\": \"%H\", \"Port\": {{.HostPort}}, \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{else}}/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name|lower}} '{ \"Host\": \"%H\", \"Priority\": \"{{$priority}}\" }' --ttl 60;{{end}}{{end}}sleep 45;done"
 ExecStop=/bin/sh -c "{{if .HttpPort}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}};{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}};{{end}}/usr/bin/etcdctl rmdir /services/{{$hostname|lower}}.{{$domain|lower}}/{{$name}}-{{$id}}{{else}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}{{end}}{{end}}"
 
 [X-Fleet]
-X-ConditionMachineOf={{.Name}}.service
+X-ConditionMachineOf={{replaceId .Name .Id}}.service
 `
 )
 
@@ -118,6 +116,10 @@ type SystemdService struct {
 	// IncludeFleet bool
 }
 
+type SystemdServiceList struct {
+	Services []SystemdService
+}
+
 func VolumeExpander(args ...interface{}) string {
 	line := ""
 	for _, i := range args {
@@ -149,14 +151,11 @@ func PortExpander(args ...interface{}) string {
 	return line
 }
 
-func LinkExpander(args ...interface{}) string {
+func LinkExpander(l Link, id int64) string {
 	line := ""
-	for _, i := range args {
-		j, _ := i.(Link)
 
-		if j.Name != "" && j.Alias != "" {
-			line = line + fmt.Sprintf(" --link %s:%s", j.Name, j.Alias)
-		}
+	if l.Name != "" && l.Alias != "" {
+		line = line + fmt.Sprintf(" --link %s:%s", strings.Replace(l.Name, "-ID", "-"+strconv.FormatInt(id, 10), -1), l.Alias)
 	}
 
 	return line
@@ -181,6 +180,10 @@ func Lower(args ...interface{}) string {
 	return strings.ToLower(val)
 }
 
+func ReplaceId(str string, id int64) string {
+	return strings.ToLower(strings.Replace(str, "-ID", "-"+strconv.FormatInt(id, 10), -1))
+}
+
 func Dns2Path(args ...interface{}) string {
 	val, _ := args[0].(string)
 
@@ -203,12 +206,13 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 		"linkExpand":   LinkExpander,
 		"varExpand":    VarExpander,
 		"lower":        Lower,
+		"replaceId":    ReplaceId,
 		"dns2path":     Dns2Path,
 	})
 	t, err := t.Parse(service)
 	checkError(err)
 
-	fname := outdir + strings.Replace(system.Name, "{{ID}}", strconv.FormatInt(system.Id, 10), -1) + ".service"
+	fname := outdir + strings.Replace(system.Name, "-ID", "-"+strconv.FormatInt(system.Id, 10), -1) + ".service"
 	f, err := os.Create(fname)
 	checkError(err)
 	defer f.Close()
@@ -224,12 +228,13 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 		"linkExpand":   LinkExpander,
 		"varExpand":    VarExpander,
 		"lower":        Lower,
+		"replaceId":    ReplaceId,
 		"dns2path":     Dns2Path,
 	})
 	t, err = t.Parse(dns_service)
 	checkError(err)
 
-	fname = outdir + strings.Replace(system.Name, "{{ID}}", strconv.FormatInt(system.Id, 10), -1) + "-dns.service"
+	fname = outdir + strings.Replace(system.Name, "-ID", "-"+strconv.FormatInt(system.Id, 10), -1) + "-dns.service"
 	f, err = os.Create(fname)
 	checkError(err)
 	defer f.Close()
@@ -248,12 +253,13 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 			"linkExpand":   LinkExpander,
 			"varExpand":    VarExpander,
 			"lower":        Lower,
+			"replaceId":    ReplaceId,
 			"dns2path":     Dns2Path,
 		})
 		t, err = t.Parse(proxy_service)
 		checkError(err)
 
-		fname = outdir + strings.Replace(system.Name, "{{ID}}", strconv.FormatInt(system.Id, 10), -1) + "-proxy.service"
+		fname = outdir + strings.Replace(system.Name, "-ID", "-"+strconv.FormatInt(system.Id, 10), -1) + "-proxy.service"
 		f, err = os.Create(fname)
 		checkError(err)
 		defer f.Close()
@@ -273,20 +279,14 @@ func checkError(err error) {
 	}
 }
 
-func (q *SystemdService) FromJSON(file string) error {
-
-	//Reading JSON file
-	J, err := ioutil.ReadFile(file)
-	if err != nil {
-		panic(err)
-	}
+func (q *SystemdServiceList) FromJSON(file io.Reader) error {
 
 	var data = &q
 	//Umarshalling JSON into struct
-	return json.Unmarshal(J, data)
+	return json.NewDecoder(file).Decode(data) //.Unmarshal(file.Fd(), data)
 }
 
-func (s *SystemdService) ToJSON(fname string) error {
+func (s *SystemdServiceList) ToJSON(fname string) error {
 
 	ff, err := os.Create(fname)
 	if err != nil {
