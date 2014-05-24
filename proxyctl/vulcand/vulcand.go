@@ -18,6 +18,11 @@ type VulcandHostJSON struct {
 }
 
 func VulcandHostAdd(client *etcdlib.EtcdClient, dockeruri string, service fleet.SystemdService, port int, path string) error {
+	err := CleanEtcd(client)
+	if err != nil {
+		return err
+	}
+
 	rand.Seed(time.Now().UnixNano())
 
 	fullname := service.Hostname + "." + service.Domain
@@ -25,7 +30,6 @@ func VulcandHostAdd(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 	dockerclient := dockerlib.NewDockerLib(dockeruri)
 
 	var ipaddress string
-	var err error
 
 	for i := 0; i < 10; i++ {
 		ipaddress, err = dockerclient.GetContainerIpaddress(service.Hostname + "-" + strconv.FormatInt(service.Id, 10))
@@ -51,6 +55,10 @@ func VulcandHostAdd(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 		if err != nil {
 			return err
 		}
+	} else {
+		if err != nil {
+			return err
+		}
 	}
 
 	fmt.Println("Get: ", "/vulcand/hosts/"+fullname)
@@ -62,32 +70,49 @@ func VulcandHostAdd(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 		if err != nil {
 			return err
 		}
+	} else {
+		if err != nil {
+			return err
+		}
 	}
 
 	// if location exist ..
 	fmt.Println("Get: ", "/vulcand/hosts/"+fullname+"/locations")
-	response, err = client.Client.Get("/vulcand/hosts/"+fullname+"/locations", false, false)
+	response, err = client.Client.Get("/vulcand/hosts/"+fullname+"/locations", true, true)
 	if !etcdlib.NotFound(err) {
-		for _, m := range response.Node.Nodes {
-			fmt.Println(m.Key)
+		fmt.Println(err)
+		fmt.Printf("%q\n\n", response)
+		if response.Node.Dir {
+			fmt.Println(response.Node.Nodes.Len())
+			for _, m := range response.Node.Nodes {
+				fmt.Println(m.Key)
 
-			fmt.Println("Get: ", m.Key+"/upstream")
-			r, err := client.Client.Get(m.Key+"/upstream", false, false)
-			if err != nil {
-				return err
-			}
-
-			fmt.Println("Get: ", "/vulcand/upstreams/"+r.Node.Value+"/endpoints/")
-			s, err := client.Client.Get("/vulcand/upstreams/"+r.Node.Value+"/endpoints/", false, false)
-			if !etcdlib.NotFound(err) {
-				for _, t := range s.Node.Nodes {
-					fmt.Println("value: ", t.Value)
-					fmt.Println("looking for: ", "http://"+ipaddress+":"+strconv.Itoa(port))
-					if t.Value == "http://"+ipaddress+":"+strconv.Itoa(port) {
-						return errors.New("Host already in endpoints")
+				fmt.Println("Get: ", m.Key+"/upstream")
+				r, err := client.Client.Get(m.Key+"/upstream", false, false)
+				if err == nil {
+					fmt.Println("Get: ", "/vulcand/upstreams/"+r.Node.Value+"/endpoints/")
+					s, err := client.Client.Get("/vulcand/upstreams/"+r.Node.Value+"/endpoints/", true, true)
+					if !etcdlib.NotFound(err) {
+						for _, t := range s.Node.Nodes {
+							fmt.Println("value: ", t.Value)
+							fmt.Println("looking for: ", "http://"+ipaddress+":"+strconv.Itoa(port))
+							if t.Value == "http://"+ipaddress+":"+strconv.Itoa(port) {
+								fmt.Println("Resetting timeout of endpoint ", "http://"+ipaddress+":"+strconv.Itoa(port))
+								_, err := client.Client.Set(t.Key, "http://"+ipaddress+":"+strconv.Itoa(port), 20)
+								if err != nil {
+									return err
+								} else {
+									return nil
+								}
+							}
+						}
 					}
 				}
 			}
+		}
+	} else {
+		if err != nil {
+			return err
 		}
 	}
 
@@ -124,7 +149,7 @@ func VulcandHostDel(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 
 	// if location exist ..
 	fmt.Println("Get: ", "/vulcand/hosts/"+fullname+"/locations")
-	response, err := client.Client.Get("/vulcand/hosts/"+fullname+"/locations", false, false)
+	response, err := client.Client.Get("/vulcand/hosts/"+fullname+"/locations", true, true)
 	if !etcdlib.NotFound(err) {
 		for _, m := range response.Node.Nodes {
 			fmt.Println(m.Key)
@@ -136,7 +161,7 @@ func VulcandHostDel(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 			}
 
 			fmt.Println("Get: ", "/vulcand/upstreams/"+r.Node.Value+"/endpoints/")
-			s, err := client.Client.Get("/vulcand/upstreams/"+r.Node.Value+"/endpoints/", false, false)
+			s, err := client.Client.Get("/vulcand/upstreams/"+r.Node.Value+"/endpoints/", true, true)
 			if !etcdlib.NotFound(err) {
 				for _, t := range s.Node.Nodes {
 					fmt.Println("value: ", t.Value)
@@ -234,6 +259,10 @@ func VulcandHostDel(client *etcdlib.EtcdClient, dockeruri string, service fleet.
 				}
 			}
 		}
+	} else {
+		if err != nil {
+			return err
+		}
 	}
 	return errors.New("Endpoint not found")
 
@@ -299,7 +328,7 @@ func createEndpoint(client *etcdlib.EtcdClient, upstreamId string, ipaddress str
 	}
 
 	fmt.Println("Set: ", "/vulcand/upstreams/"+upstreamId+"/endpoints/"+id, "http://"+ipaddress+":"+strconv.Itoa(port))
-	_, err := client.Client.Set("/vulcand/upstreams/"+upstreamId+"/endpoints/"+id, "http://"+ipaddress+":"+strconv.Itoa(port), 0)
+	_, err := client.Client.Set("/vulcand/upstreams/"+upstreamId+"/endpoints/"+id, "http://"+ipaddress+":"+strconv.Itoa(port), 20)
 	if err != nil {
 		return "", err
 	}
@@ -320,13 +349,13 @@ func createLocation(client *etcdlib.EtcdClient, fullname string, upstreamId stri
 	}
 
 	fmt.Println("Set: ", "/vulcand/hosts/"+fullname+"/locations/"+id+"/path", path)
-	_, err := client.Client.Set("/vulcand/hosts/"+fullname+"/locations/"+id+"/path", path, 0)
+	_, err := client.Client.Set("/vulcand/hosts/"+fullname+"/locations/"+id+"/path", path, 20)
 	if err != nil {
 		return "", err
 	}
 
 	fmt.Println("Set: ", "/vulcand/hosts/"+fullname+"/locations/"+id+"/upstream", upstreamId)
-	_, err = client.Client.Set("/vulcand/hosts/"+fullname+"/locations/"+id+"/upstream", upstreamId, 0)
+	_, err = client.Client.Set("/vulcand/hosts/"+fullname+"/locations/"+id+"/upstream", upstreamId, 20)
 	if err != nil {
 		return "", err
 	}
@@ -339,4 +368,54 @@ func genId() string {
 		id = rand.Int63() + 1
 	}
 	return strconv.FormatInt(id, 10)
+}
+
+func CleanEtcd(client *etcdlib.EtcdClient) error {
+	fmt.Println("Cleaning")
+	var paths []string
+	recursive := true
+	sorted := true
+	r, err := client.Client.Get("/vulcand", sorted, recursive)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	for _, a := range r.Node.Nodes {
+		if a.Dir {
+			for _, b := range a.Nodes {
+				if b.Dir {
+					for _, c := range b.Nodes {
+						if c.Dir {
+							for _, d := range c.Nodes {
+								if d.Dir {
+									for _, e := range d.Nodes {
+										if e.Dir {
+											paths = append(paths, e.Key)
+										}
+									}
+									paths = append(paths, d.Key)
+								}
+							}
+							paths = append(paths, c.Key)
+						}
+					}
+					paths = append(paths, b.Key)
+				}
+			}
+			paths = append(paths, a.Key)
+		}
+	}
+	fmt.Println(paths)
+	for _, path := range paths {
+		response, err := client.Client.Get(path, false, false)
+		if etcdlib.NotFound(err) {
+			fmt.Printf("Key error: %s", err)
+		}
+		if etcdlib.IsEmptyDir(response.Node) {
+			client.Client.Delete(response.Node.Key, true)
+		} else {
+			return nil
+		}
+	}
+	return nil
 }

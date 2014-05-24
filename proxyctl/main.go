@@ -1,92 +1,128 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"github.com/DimShadoWWW/integrator/etcdlib"
 	"github.com/DimShadoWWW/integrator/fleet"
 	"github.com/DimShadoWWW/integrator/proxyctl/gogeta"
 	"github.com/DimShadoWWW/integrator/proxyctl/vulcand"
+	"github.com/alecthomas/kingpin"
 	"os"
-	"strings"
+	"strconv"
+	"time"
+)
+
+var (
+	app       = kingpin.New("proxyctl", "A command-line application to add and remove services from vulcand in CoreOS.")
+	serverIP  = app.Flag("server", "Etcd address").Default("127.0.0.1").MetaVarFromDefault().IP()
+	docker    = app.Flag("docker", "docker uri for fleet").Default("unix:///var/run/docker.sock").String()
+	proxytype = app.Flag("type", "proxy software (gogeta, vulcand)").Default("vulcand").String()
+	Id        = app.Flag("id", "id for service").Required().String()
+	Hostname  = app.Flag("hostname", "hostname for service").Required().String()
+	Domain    = app.Flag("domain", "domain for service").Required().String()
+	Region    = app.Flag("region", "region for service").Required().String()
+	Port      = app.Flag("port", "service's listenning port").Required().Int()
+	Path      = app.Flag("path", "path to serve (\"/.*\")").Default("/.*").String()
+	add       = app.Command("add", "Add new services.")
+	del       = app.Command("del", "Remove a service.")
 )
 
 func main() {
-	proxytype := flag.String("type", "vulcand", "proxy software (gogeta, vulcand)")
-	path := flag.String("path", "/.*", "proxy software (gogeta, vulcand)")
-	machines := flag.String("endpoint", "http://127.0.0.1:4001", "etcd endpoint for fleet")
-	docker := flag.String("docker", "unix:///var/run/docker.sock", "docker uri for fleet")
 
-	command := flag.String("cmd", "add", "Action (add, del)")
-	id := flag.Int64("id", 0, "Id")
-	hostname := flag.String("hostname", "", "Hostname")
-	domain := flag.String("domain", "local", "Domain")
-	region := flag.String("region", "east", "Region")
-	port := flag.Int("port", 80, "Port")
+	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
+	// Register user
+	case "add":
+		machines := []string{"http://" + serverIP.String() + ":4001"}
 
-	flag.Parse()
+		fmt.Printf("%s\n", machines)
 
-	if *id != 0 || *hostname != "" {
-		client, err := etcdlib.NewEtcdClient(strings.Split(*machines, ","))
+		client, err := etcdlib.NewEtcdClient(machines)
 		if err != nil {
 			fmt.Printf("Etcd: %s\n", err)
 		}
 
+		id, err := strconv.ParseInt(*Id, 10, 64)
+		if err != nil {
+			fmt.Printf("id conversion errorr: %s\n", err)
+		}
+
 		f := fleet.SystemdService{
-			Id:       *id,
-			Hostname: *hostname,
-			Domain:   *domain,
-			Region:   *region,
-			HttpPort: *port,
+			Id:       id,
+			Hostname: *Hostname,
+			Domain:   *Domain,
+			Region:   *Region,
+			HttpPort: *Port,
 		}
 
 		switch {
-		case *command == "add" || *command == "Add":
-			switch {
-			case *proxytype == "vulcand":
-				err = vulcand.VulcandHostAdd(client, *docker, f, *port, *path)
+		case *proxytype == "vulcand":
+			for {
+				err = vulcand.VulcandHostAdd(client, *docker, f, *Port, *Path)
 				if err != nil {
 					fmt.Printf("Proxy addition failed: %s\n", err)
 					fmt.Fprintln(os.Stderr, err)
 					os.Exit(1)
 				}
-			case *proxytype == "gogeta":
-				err = gogeta.GogetaHostAdd(client, *docker, f, *port)
-				if err != nil {
-					fmt.Printf("Proxy addition failed: %s\n", err)
-					fmt.Fprintln(os.Stderr, err)
-					os.Exit(1)
-				}
-			default:
-				fmt.Println("Proxy type not supported")
-
+				time.Sleep(10 * time.Second)
 			}
-		case *command == "del" || *command == "Del":
-			switch {
-			case *proxytype == "vulcand":
-				err = vulcand.VulcandHostDel(client, *docker, f, *port)
+		case *proxytype == "gogeta":
+			for {
+				err = gogeta.GogetaHostAdd(client, *docker, f, *Port)
 				if err != nil {
-					fmt.Printf("Proxy deletion failed: %s\n", err)
+					fmt.Printf("Proxy addition failed: %s\n", err)
 					fmt.Fprintln(os.Stderr, err)
-					os.Exit(2)
+					os.Exit(1)
 				}
-			case *proxytype == "gogeta":
-				err = gogeta.GogetaHostDel(client, f)
-				if err != nil {
-					fmt.Printf("Proxy deletion failed: %s\n", err)
-					fmt.Fprintln(os.Stderr, err)
-					os.Exit(2)
-				}
-
-			default:
-				fmt.Println("Proxy type not supported")
-				os.Exit(3)
+				time.Sleep(10 * time.Second)
 			}
 		default:
-			fmt.Println("Command not found")
-			os.Exit(4)
+			fmt.Println("Proxy type not supported")
+
 		}
-	} else {
-		flag.Usage()
+	case "del":
+		machines := []string{"http://" + string(*serverIP) + ":4001"}
+
+		client, err := etcdlib.NewEtcdClient(machines)
+		if err != nil {
+			fmt.Printf("Etcd: %s\n", err)
+		}
+
+		id, err := strconv.ParseInt(*Id, 10, 64)
+		if err != nil {
+			fmt.Printf("id conversion errorr: %s\n", err)
+		}
+
+		f := fleet.SystemdService{
+			Id:       id,
+			Hostname: *Hostname,
+			Domain:   *Domain,
+			Region:   *Region,
+			HttpPort: *Port,
+		}
+
+		switch {
+		case *proxytype == "vulcand":
+			err = vulcand.VulcandHostDel(client, *docker, f, *Port)
+			if err != nil {
+				fmt.Printf("Proxy deletion failed: %s\n", err)
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(2)
+			}
+		case *proxytype == "gogeta":
+			err = gogeta.GogetaHostDel(client, f)
+			if err != nil {
+				fmt.Printf("Proxy deletion failed: %s\n", err)
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(2)
+			}
+
+		default:
+			fmt.Println("Proxy type not supported")
+			os.Exit(3)
+		}
+	default:
+		fmt.Println("Command not found")
+		os.Exit(4)
 	}
+
 }
