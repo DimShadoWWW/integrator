@@ -4,7 +4,7 @@ import (
 	"github.com/deckarep/golang-set"
 	"github.com/dotcloud/docker/engine"
 	"github.com/dotcloud/docker/nat"
-	"github.com/dotcloud/docker/utils"
+	"github.com/dotcloud/docker/pkg/units"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/stevedomin/termtable"
 	"github.com/wsxiaoys/terminal/color"
@@ -618,7 +618,7 @@ func (l *Lib) Status() {
 	t1 := termtable.NewTable(nil, nil)
 	t1.SetHeader([]string{"ID", "Repository:Tag", "Created"})
 	for _, i := range imgs_all {
-		t1.AddRow([]string{i.ID, i.RepoTags[0], utils.HumanDuration(time.Now().UTC().Sub(time.Unix(i.Created, 0)))})
+		t1.AddRow([]string{i.ID, i.RepoTags[0], units.HumanDuration(time.Now().UTC().Sub(time.Unix(i.Created, 0)))})
 	}
 	color.Println(t1.Render())
 }
