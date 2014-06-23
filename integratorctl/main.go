@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-import . "github.com/DimShadoWWW/integrator/db"
+// import . "github.com/DimShadoWWW/integrator/db"
 
 var (
 	etcdclient etcdlib.EtcdClient
@@ -21,7 +21,7 @@ var (
 
 	// debug    = app.Flag("debug", "enable debug mode").Default("false").Bool()
 	app         = kingpin.New("integratorctl", "A command-line application to generate and deploy multiple services in CoreOS.")
-	serverIP    = app.Flag("server", "Etcd address").Default("127.0.0.1").MetaVarFromDefault().IP()
+	serverIP    = app.Flag("server", "Etcd address").Default("127.0.0.1").IP()
 	pretend     = app.Flag("pretend", "Instead of actually performing the deploy, simply generate what *would* have been deployed if pretend is false").Bool()
 	add         = app.Command("add", "Generate and deploy a new service.")
 	servicejson = add.Arg("jsonfile", "jsonfile for input").Required().File()
@@ -36,11 +36,11 @@ func main() {
 
 		if *servicejson != nil {
 
-			DB.CreateTable(fleet.SystemdService{})
-			DB.CreateTable(fleet.Port{})
-			DB.CreateTable(fleet.Volume{})
-			DB.CreateTable(fleet.Link{})
-			DB.CreateTable(fleet.Env{})
+			// DB.CreateTable(fleet.SystemdService{})
+			// DB.CreateTable(fleet.Port{})
+			// DB.CreateTable(fleet.Volume{})
+			// DB.CreateTable(fleet.Link{})
+			// DB.CreateTable(fleet.Env{})
 
 			rand.Seed(time.Now().UnixNano())
 			var id int64

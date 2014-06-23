@@ -1,0 +1,14 @@
+github.com/GeertJohan/go.rice
+github.com/gorilla/mux
+github.com/wsxiaoys/terminal/color
+github.com/deckarep/golang-set
+github.com/dotcloud/docker/engine
+github.com/dotcloud/docker/nat
+github.com/dotcloud/docker/utils
+github.com/fsouza/go-dockerclient
+github.com/stevedomin/termtable
+github.com/coreos/locksmith/lock
+github.com/coreos/go-etcd/etcd
+github.com/cihub/seelog
+github.com/alecthomas/kingpin
+github.com/mailgun/vulcand/backend

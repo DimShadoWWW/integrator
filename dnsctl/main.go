@@ -12,7 +12,7 @@ import (
 var (
 	// debug    = app.Flag("debug", "enable debug mode").Default("false").Bool()
 	app      = kingpin.New("dnsctl", "A command-line application to add and remove services/$1 from vulcand in CoreOS.")
-	serverIP = app.Flag("server", "Etcd address").Default("127.0.0.1").MetaVarFromDefault().IP()
+	serverIP = app.Flag("server", "Etcd address").Default("127.0.0.1").IP()
 	docker   = app.Flag("docker", "docker uri").Default("unix:///var/run/docker.sock").String()
 	id       = app.Flag("id", "id for service").Required().Int64()
 	hostname = app.Flag("hostname", "hostname for service").Required().String()

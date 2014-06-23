@@ -3,8 +3,11 @@ package fleet
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/wsxiaoys/terminal/color"
 	"io"
 	"os"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"text/template"
@@ -30,32 +33,32 @@ X-Conflicts={{replaceId $element $id}}.service{{end}}{{end}}
 `
 
 	dns_service = `[Unit]
-Description={{.Description}} presence service
+Description={{.Description}} DNS service
 BindsTo={{replaceId .Name .Id}}.service
 After={{replaceId .Name .Id}}.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
 TimeoutStartSec=0
-ExecStart=/home/core/dnsctl --hostname={{.Hostname}} --domain={{.Domain}} --region={{.Region}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} add
+ExecStart=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} add
 ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
-ExecStop=/home/core/dnsctl --hostname={{.Hostname}} --domain={{.Domain}} --region={{.Region}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} del
+ExecStop=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} del
 ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
 
 [X-Fleet]
 X-ConditionMachineOf={{replaceId .Name .Id}}.service
 `
 	proxy_service = `[Unit]
-Description={{.Description}} presence service
-BindsTo={{replaceId .Name .Id}}-dns.service
-After={{replaceId .Name .Id}}-dns.service
+Description={{.Description}} Proxy service
+BindsTo={{replaceId .Name .Id}}.service
+After={{replaceId .Name .Id}}.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
 TimeoutStartSec=0
-ExecStart=/home/core/proxyctl --id={{$id}} --hostname={{$hostname}} --domain={{$domain}} --region={{$region}} --port={{$httpport}} add
-ExecStop=/home/core/proxyctl --id={{$id}} --hostname={{$hostname}} --domain={{$domain}} --region={{$region}} --port={{$httpport}} del
+ExecStart=/home/core/proxyctl --id={{$id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} add
+ExecStop=/home/core/proxyctl --id={{$id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} del
 
 [X-Fleet]
-X-ConditionMachineOf={{replaceId .Name .Id}}-dns.service
+X-ConditionMachineOf={{replaceId .Name .Id}}.service
 `
 	service_discovery = `
 [Unit]
@@ -155,7 +158,7 @@ func LinkExpander(l Link, id int64) string {
 	line := ""
 
 	if l.Name != "" && l.Alias != "" {
-		line = line + fmt.Sprintf(" --link %s:%s", strings.Replace(l.Name, "-ID", "-"+strconv.FormatInt(id, 10), -1), l.Alias)
+		line = line + fmt.Sprintf(" --link %s:%s", strings.Replace(l.Name, "_ID", "-"+strconv.FormatInt(id, 10), -1), l.Alias)
 	}
 
 	return line
@@ -181,7 +184,7 @@ func Lower(args ...interface{}) string {
 }
 
 func ReplaceId(str string, id int64) string {
-	return strings.ToLower(strings.Replace(str, "-ID", "-"+strconv.FormatInt(id, 10), -1))
+	return strings.ToLower(strings.Replace(str, "_ID", "-"+strconv.FormatInt(id, 10), -1))
 }
 
 func Dns2Path(args ...interface{}) string {
@@ -198,6 +201,7 @@ func Dns2Path(args ...interface{}) string {
 
 func CreateSystemdFiles(system SystemdService, outdir string) []string {
 
+	color.Println("@bCreating systemd unit file for service: "+color.ResetCode, system.Name)
 	t := template.New("Systemd service")
 	// add our function
 	t = t.Funcs(template.FuncMap{
@@ -212,15 +216,17 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 	t, err := t.Parse(service)
 	checkError(err)
 
-	fname := outdir + strings.Replace(system.Name, "-ID", "-"+strconv.FormatInt(system.Id, 10), -1) + ".service"
-	f, err := os.Create(fname)
+	fname, err := generateUnitName(system, "")
+	checkError(err)
+	f, err := os.Create(outdir + fname)
 	checkError(err)
 	defer f.Close()
 	err = t.Execute(io.Writer(f), system)
 	checkError(err)
-	service_files := []string{fname}
+	service_files := []string{outdir + fname}
 
 	// dns
+	color.Println("@bCreating systemd unit file for dns control of service: "+color.ResetCode, system.Name)
 	t = template.New("Systemd dns service")
 	t = t.Funcs(template.FuncMap{
 		"volumeExpand": VolumeExpander,
@@ -234,11 +240,12 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 	t, err = t.Parse(dns_service)
 	checkError(err)
 
-	fname = outdir + strings.Replace(system.Name, "-ID", "-"+strconv.FormatInt(system.Id, 10), -1) + "-dns.service"
-	f, err = os.Create(fname)
+	fname, err = generateUnitName(system, "dns")
+	checkError(err)
+	f, err = os.Create(outdir + fname)
 	checkError(err)
 	defer f.Close()
-	service_files = append(service_files, fname)
+	service_files = append(service_files, outdir+fname)
 
 	err = t.Execute(io.Writer(f), system)
 	checkError(err)
@@ -246,6 +253,7 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 
 	// enable proxy only if httport > 0
 	if system.HttpPort > 0 {
+		color.Println("@bCreating systemd unit file for inverse proxy of service: "+color.ResetCode, system.Name)
 		t = template.New("Systemd proxy service")
 		t = t.Funcs(template.FuncMap{
 			"volumeExpand": VolumeExpander,
@@ -259,11 +267,12 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 		t, err = t.Parse(proxy_service)
 		checkError(err)
 
-		fname = outdir + strings.Replace(system.Name, "-ID", "-"+strconv.FormatInt(system.Id, 10), -1) + "-proxy.service"
-		f, err = os.Create(fname)
+		fname, err = generateUnitName(system, "proxy")
+		checkError(err)
+		f, err = os.Create(outdir + fname)
 		checkError(err)
 		defer f.Close()
-		service_files = append(service_files, fname)
+		service_files = append(service_files, outdir+fname)
 
 		err = t.Execute(io.Writer(f), system)
 		checkError(err)
@@ -274,16 +283,49 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 
 func checkError(err error) {
 	if err != nil {
-		fmt.Println("Fatal error ", err.Error())
+		color.Errorf("@bERROR: "+color.ResetCode, "Fatal error ", err.Error())
 		os.Exit(1)
 	}
 }
 
-func (q *SystemdServiceList) FromJSON(file io.Reader) error {
+func (q *SystemdServiceList) FromJSON(file io.Reader) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			err = r.(error)
+		}
+	}()
 
 	var data = &q
 	//Umarshalling JSON into struct
 	return json.NewDecoder(file).Decode(data) //.Unmarshal(file.Fd(), data)
+}
+
+func generateUnitName(system SystemdService, suffix string) (fname string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			fname = ""
+			err = r.(error)
+		}
+	}()
+
+	if suffix != "" {
+		suffix = "-" + suffix
+	}
+
+	matched, err := regexp.MatchString("_ID", system.Name)
+	if matched {
+		fname = strings.Replace(system.Name, "_ID", suffix+"-"+strconv.FormatInt(system.Id, 10), -1) + ".service"
+	} else {
+		fname = system.Name + suffix + ".service"
+	}
+
+	return fname, nil
 }
 
 func (s *SystemdServiceList) ToJSON(fname string) error {

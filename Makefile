@@ -13,7 +13,22 @@ deps:
 	go get github.com/stevedomin/termtable
 	go get github.com/coreos/locksmith/lock
 	go get github.com/coreos/go-etcd/etcd
+	go get github.com/cihub/seelog
+	go get github.com/alecthomas/kingpin
 
-build:
+build: builddnsctl buildproxyctl buildintegratorctl buildintegrator
+
+buildintegrator:
 	go build
 	rice append --exec integrator
+	mv integrator bin
+
+builddnsctl:
+	cd dnsctl && go build && mv dnsctl ../bin
+
+buildproxyctl:
+	cd proxyctl && go build && mv proxyctl ../bin
+
+buildintegratorctl:
+	cd integratorctl && go build && mv integratorctl ../bin
+

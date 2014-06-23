@@ -10,12 +10,23 @@ import (
 	"time"
 )
 
+var (
+	ipaddress       string
+	container_name  string
+	out_hostname    string
+	in_hostname     string
+	internal_domain string
+	external_domain string
+	out_port        string
+)
+
 func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, hostname string, domain string, port int, region string, priority int) error {
 
-	internal_domain := "docker" // region used for
+	external_domain = "production" // region used for
+	internal_domain = "docker"     // region used for
 
-	out_hostname := region + "." + hostname + "." + domain
-	in_hostname := region + "." + hostname + "." + internal_domain + "." + domain
+	out_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + external_domain + "." + region + "." + domain
+	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + region + "." + domain
 
 	dockerclient, err := dockerlib.NewDockerLib(dockeruri)
 	if err != nil {
@@ -23,11 +34,17 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 	}
 
 	// Docker internal ip address
-	var ipaddress string
+	fmt.Println("Adding internal DNS entry")
+	if id == 0 {
+		container_name = hostname
+	} else {
+		container_name = hostname + "-" + strconv.FormatInt(id, 10)
+	}
 
 	for i := 0; i < 10; i++ {
-		ipaddress, err = dockerclient.GetContainerIpaddress(hostname + "-" + strconv.FormatInt(id, 10))
+		ipaddress, err = dockerclient.GetContainerIpaddress(container_name)
 		if err != nil {
+			fmt.Println(err)
 			// retry until this
 			if i == 9 {
 				return err
@@ -39,19 +56,21 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 		time.Sleep(10 * time.Second)
 	}
 
+	fmt.Println("Creating entry")
+
 	entry := DnsEntry{
 		Host:     ipaddress,
 		Port:     port,
 		Priority: priority,
 	}
 
-	hostpath := strings.Split(strconv.FormatInt(id, 10)+"."+in_hostname, ".")
+	hostpath := strings.Split(in_hostname, ".")
 	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
 		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]
 	}
 
 	host := DnsHost{
-		Hostname: strconv.FormatInt(id, 10) + "." + in_hostname,
+		Hostname: in_hostname,
 		EtcdKey:  "/skydns/" + strings.Join(hostpath, "/"),
 		Entry:    []DnsEntry{entry},
 	}
@@ -67,24 +86,29 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 	}
 
 	// Add CoreOS's node external ip address to hostname with region
+	fmt.Println("Adding external DNS entry")
 	out_ipaddress, err := GetLocalIp("8.8.8.8:53")
 	if err != nil {
 		return err
 	}
-	var out_port string
 
-	for i := 0; i < 10; i++ {
-		out_port, err = dockerclient.GetContainerTcpPort(hostname+"-"+strconv.FormatInt(id, 10), port)
-		if err != nil {
-			// retry until this
-			if i == 9 {
-				return err
+	if port == 0 {
+		out_port = "0"
+	} else {
+		for i := 0; i < 10; i++ {
+			out_port, err = dockerclient.GetContainerTcpPort(container_name, port)
+			if err != nil {
+				// retry until this
+				fmt.Println(err)
+				if i == 9 {
+					return err
+				}
+			} else {
+				break
 			}
-		} else {
-			break
+			// wait 10 seconds to try again
+			time.Sleep(10 * time.Second)
 		}
-		// wait 10 seconds to try again
-		time.Sleep(10 * time.Second)
 	}
 
 	oport, err := strconv.Atoi(out_port)
@@ -102,13 +126,13 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 		return err
 	}
 
-	hostpath = strings.Split(strconv.FormatInt(id, 10)+"."+out_hostname, ".")
+	hostpath = strings.Split(out_hostname, ".")
 	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
 		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]
 	}
 
 	host = DnsHost{
-		Hostname: strconv.FormatInt(id, 10) + "." + out_hostname,
+		Hostname: out_hostname,
 		EtcdKey:  "/skydns/" + strings.Join(hostpath, "/"),
 		Entry:    []DnsEntry{entry},
 	}

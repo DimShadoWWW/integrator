@@ -31,7 +31,6 @@ func Deploy(fname string, address string) error {
 	cmd.Stdout = &stdout
 
 	err = cmd.Run()
-	fmt.Println("error run:", err)
 	if err != nil {
 		fmt.Errorf("error: %s\n", err)
 		fmt.Printf("stderr: %s\n", stderr.String())

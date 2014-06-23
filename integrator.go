@@ -18,6 +18,7 @@ import (
 	"strings"
 )
 import log "github.com/cihub/seelog"
+import _ "net/http/pprof"
 
 type Configuration struct {
 	Address string

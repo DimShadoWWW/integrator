@@ -9,20 +9,20 @@ import (
 
 func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname string, domain string, port int, region string) error {
 
-	internal_domain := "docker" // region used for
-
-	out_hostname := region + "." + hostname + "." + domain
-	in_hostname := region + "." + hostname + "." + internal_domain + "." + domain
+	external_domain = "production" // region used for
+	internal_domain = "docker"     // region used for
+	out_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + external_domain + "." + region + "." + domain
+	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + region + "." + domain
 
 	// Docker internal ip address
 
-	hostpath := strings.Split(strconv.FormatInt(id, 10)+"."+in_hostname, ".")
+	hostpath := strings.Split(in_hostname, ".")
 	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
 		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]
 	}
 
 	host := DnsHost{
-		Hostname: strconv.FormatInt(id, 10) + "." + in_hostname,
+		Hostname: in_hostname,
 		EtcdKey:  "/skydns/" + strings.Join(hostpath, "/"),
 		Entry:    []DnsEntry{},
 	}
@@ -47,13 +47,13 @@ func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname string, do
 		}
 	}
 
-	hostpath = strings.Split(strconv.FormatInt(id, 10)+"."+out_hostname, ".")
+	hostpath = strings.Split(out_hostname, ".")
 	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
 		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]
 	}
 
 	host = DnsHost{
-		Hostname: strconv.FormatInt(id, 10) + "." + out_hostname,
+		Hostname: out_hostname,
 		EtcdKey:  "/skydns/" + strings.Join(hostpath, "/"),
 		Entry:    []DnsEntry{},
 	}

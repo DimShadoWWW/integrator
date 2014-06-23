@@ -12,7 +12,7 @@ import (
 
 var (
 	app       = kingpin.New("proxyctl", "A command-line application to add and remove services from vulcand in CoreOS.")
-	serverIP  = app.Flag("server", "Etcd address").Default("127.0.0.1").MetaVarFromDefault().IP()
+	serverIP  = app.Flag("server", "Etcd address").Default("127.0.0.1").IP()
 	docker    = app.Flag("docker", "docker uri for fleet").Default("unix:///var/run/docker.sock").String()
 	proxytype = app.Flag("type", "proxy software (gogeta, vulcand)").Default("vulcand").String()
 	Id        = app.Flag("id", "id for service").Required().String()
