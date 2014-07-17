@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/wsxiaoys/terminal/color"
 	"io"
+	"net"
 	"os"
 	"regexp"
 	"runtime"
@@ -23,7 +24,7 @@ Requires={{replaceId $element $id}}.service{{end}}
 
 [Service]
 TimeoutStartSec=0
-ExecStart=/bin/bash -c '/usr/bin/docker start -a {{replaceId .Name .Id|lower}} || /usr/bin/docker run --name {{replaceId .Name .Id|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}} {{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}} {{if .Links}}{{range $index, $element := .Links}}{{linkExpand $element $id}}{{end}}{{end}} {{.ImageName}} {{.Command}}'
+ExecStart=/bin/bash -c '/usr/bin/docker start -a {{replaceId .Name .Id|lower}} || /usr/bin/docker run --name {{replaceId .Name .Id|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.production.{{.Region|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}}{{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}}{{if .Variables}}{{varExpand .Variables}}{{end}}{{if .Links}}{{range $index, $element := .Links}}{{linkExpand $element $id}}{{end}}{{end}} --dns {{internalip}} --dns 8.8.8.8 --dns 8.8.4.4 {{.ImageName}} {{.Command}}'
 ExecStop=/bin/bash -c '/usr/bin/docker stop {{replaceId .Name .Id|lower}};/usr/bin/docker rm {{replaceId .Name .Id|lower}}'
 
 
@@ -39,9 +40,9 @@ After={{replaceId .Name .Id}}.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
 TimeoutStartSec=0
-ExecStart=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} add
+ExecStart=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{hasid $name $id}} --port={{$httpport}} --priority={{.Priority}} add
 ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
-ExecStop=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{.Id}} --port={{.HttpPort}} --priority={{.Priority}} del
+ExecStop=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{hasid $name $id}} --port={{$httpport}} --priority={{.Priority}} del
 ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
 
 [X-Fleet]
@@ -53,9 +54,9 @@ BindsTo={{replaceId .Name .Id}}.service
 After={{replaceId .Name .Id}}.service
 {{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
 [Service]
-TimeoutStartSec=0
-ExecStart=/home/core/proxyctl --id={{$id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} add
-ExecStop=/home/core/proxyctl --id={{$id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} del
+RemainAfterExit=yes
+ExecStart=/home/core/proxyctl --id={{hasid $name $id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} add
+ExecStop=/home/core/proxyctl --id={{hasid $name $id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} del
 
 [X-Fleet]
 X-ConditionMachineOf={{replaceId .Name .Id}}.service
@@ -75,25 +76,21 @@ X-ConditionMachineOf={{replaceId .Name .Id}}.service
 )
 
 type Volume struct {
-	Id           int64
 	LocalDir     string
 	ContainerDir string
 }
 
 type Port struct {
-	Id            int64
 	HostPort      string
 	ContainerPort string
 	Protocol      string
 }
 
 type Link struct {
-	Id    int64
 	Name  string
 	Alias string
 }
 type Env struct {
-	Id    int64
 	Name  string
 	Value string
 }
@@ -164,15 +161,16 @@ func LinkExpander(l Link, id int64) string {
 	return line
 }
 
-func VarExpander(args ...interface{}) string {
+func VarExpander(varlist []Env) string {
 	line := ""
-	for _, i := range args {
-		j, _ := i.(Env)
-
-		if j.Name != "" && j.Value != "" {
-			line = line + fmt.Sprintf(" -e %s=\"%s\"", j.Name, j.Value)
+	// for _, vars := range varlist {
+	for k, value := range varlist {
+		color.Println("@r var: ", k, value)
+		if value.Name != "" {
+			line = line + fmt.Sprintf(" -e %s='%s'", value.Name, value.Value)
 		}
 	}
+	// }
 
 	return line
 }
@@ -185,6 +183,43 @@ func Lower(args ...interface{}) string {
 
 func ReplaceId(str string, id int64) string {
 	return strings.ToLower(strings.Replace(str, "_ID", "-"+strconv.FormatInt(id, 10), -1))
+}
+
+func HasId(str string, id int64) int64 {
+	if strings.Contains(str, "_ID") {
+		return id
+	} else {
+		return 0
+	}
+}
+
+func getInternalIP() string {
+	interf, err := net.Interfaces()
+	if err != nil {
+		return "172.17.42.1"
+	}
+
+	for _, i := range interf {
+		if i.Name == "docker0" {
+			addrs, err := i.Addrs()
+			if err != nil {
+				return "172.17.42.1"
+			}
+			for _, ifa := range addrs {
+				switch ifa := ifa.(type) {
+				case *net.IPAddr:
+					if ifa.IP.To4() != nil {
+						return ifa.IP.String()
+					}
+				case *net.IPNet:
+					if ifa.IP.To4() != nil {
+						return ifa.IP.String()
+					}
+				}
+			}
+		}
+	}
+	return "172.17.42.1"
 }
 
 func Dns2Path(args ...interface{}) string {
@@ -203,6 +238,10 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 
 	color.Println("@bCreating systemd unit file for service: "+color.ResetCode, system.Name)
 	t := template.New("Systemd service")
+	color.Println("@r System: "+color.ResetCode, system)
+	color.Println("@r Variables: "+color.ResetCode, system.Variables)
+
+	// t.Delims("{{", "}}\n")
 	// add our function
 	t = t.Funcs(template.FuncMap{
 		"volumeExpand": VolumeExpander,
@@ -212,6 +251,8 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 		"lower":        Lower,
 		"replaceId":    ReplaceId,
 		"dns2path":     Dns2Path,
+		"hasid":        HasId,
+		"internalip":   getInternalIP,
 	})
 	t, err := t.Parse(service)
 	checkError(err)
@@ -228,6 +269,7 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 	// dns
 	color.Println("@bCreating systemd unit file for dns control of service: "+color.ResetCode, system.Name)
 	t = template.New("Systemd dns service")
+	// t.Delims("{{", "}}\n")
 	t = t.Funcs(template.FuncMap{
 		"volumeExpand": VolumeExpander,
 		"portExpand":   PortExpander,
@@ -236,6 +278,8 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 		"lower":        Lower,
 		"replaceId":    ReplaceId,
 		"dns2path":     Dns2Path,
+		"hasid":        HasId,
+		"internalip":   getInternalIP,
 	})
 	t, err = t.Parse(dns_service)
 	checkError(err)
@@ -255,6 +299,7 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 	if system.HttpPort > 0 {
 		color.Println("@bCreating systemd unit file for inverse proxy of service: "+color.ResetCode, system.Name)
 		t = template.New("Systemd proxy service")
+		// t.Delims("{{", "}}\n")
 		t = t.Funcs(template.FuncMap{
 			"volumeExpand": VolumeExpander,
 			"portExpand":   PortExpander,
@@ -263,6 +308,8 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 			"lower":        Lower,
 			"replaceId":    ReplaceId,
 			"dns2path":     Dns2Path,
+			"hasid":        HasId,
+			"internalip":   getInternalIP,
 		})
 		t, err = t.Parse(proxy_service)
 		checkError(err)
