@@ -68,7 +68,7 @@ func main() {
 			}
 
 			for _, serv := range myServices.Services {
-				fmt.Println(serv)
+				// fmt.Println(serv)
 				serv.Id = id
 
 				service_files := fleet.CreateSystemdFiles(serv, "./")
