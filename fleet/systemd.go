@@ -15,11 +15,13 @@ import (
 )
 
 const (
+	// ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
+	// ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
 	service = `[Unit]
 Description={{.Description}}
 After=docker.service
 Requires=docker.service{{$id := .Id}}{{$name := .Name}}{{$hostname := .Hostname}}{{$domain := .Domain}}{{$region := .Region}}{{$priority := .Priority}}{{$httpport := .HttpPort}}
-{{range $index, $element := .Deps}}After={{replaceId $element $id}}.service
+{{range $index, $element := .Deps}}
 Requires={{replaceId $element $id}}.service
 {{end}}
 [Service]
@@ -27,17 +29,13 @@ TimeoutStartSec=0
 ExecStart=/bin/bash -c '/usr/bin/docker start -a {{replaceId .Name .Id|lower}} || /usr/bin/docker run --name {{replaceId .Name .Id|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.production.{{.Region|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}}{{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}}{{if .Variables}}{{varExpand .Variables}}{{end}}{{if .Links}}{{range $index, $element := .Links}}{{linkExpand $element $id}}{{end}}{{end}} {{if .Memory}}--memory="{{.Memory}}"{{end}} --dns {{internalip}} --dns 8.8.8.8 --dns 8.8.4.4 {{.ImageName}} {{.Command}}'
 {{if gt $httpport 0}}ExecStartPost=/home/core/proxyctl --id={{hasid $name $id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} add{{end}}
 ExecStartPost=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{hasid $name $id}} --port={{$httpport}} --priority={{.Priority}} add
-ExecStartPost=/usr/bin/etcdctl set /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}} '{ \"Host\": \"%H\", \"Port\": {{$httpport}}, \"Priority\": \"{{$priority}}\" }'
 ExecStop=/bin/bash -c '/usr/bin/docker stop {{replaceId .Name .Id|lower}};/usr/bin/docker rm {{replaceId .Name .Id|lower}}'
-{{if gt $httpport 0}}ExecStopPost=/home/core/proxyctl --id={{hasid $name $id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} del {{end}}
 ExecStopPost=/home/core/dnsctl --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{hasid $name $id}} --port={{$httpport}} --priority={{.Priority}} del
-ExecStopPost=/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}
-
+{{if gt $httpport 0}}ExecStopPost=/home/core/proxyctl --id={{hasid $name $id}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} del {{end}}
 
 [X-Fleet]{{range $index, $element := .Deps}}
 X-ConditionMachineOf={{replaceId $element $id}}.service
-{{end}}
-{{if .Conflicts}}
+{{end}}{{if .Conflicts}}
 {{range $index, $element := .Conflicts}}
 X-Conflicts={{replaceId $element $id}}.service{{end}}{{end}}
 `
