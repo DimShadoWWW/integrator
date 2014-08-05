@@ -7,7 +7,6 @@ import (
 	"github.com/alecthomas/kingpin"
 	"os"
 	"strconv"
-	"time"
 )
 
 var (
@@ -49,21 +48,20 @@ func main() {
 
 		switch {
 		case *proxytype == "vulcand":
-			for {
-				err = vulcand.VulcandHostAdd(machines, *docker, f, *Port, *Path)
-				if err != nil {
-					fmt.Printf("Proxy addition failed: %s\n", err)
-					fmt.Fprintln(os.Stderr, err)
-					os.Exit(1)
-				}
-				time.Sleep(10 * time.Second)
+			err = vulcand.VulcandHostAdd(machines, *docker, f, *Port, *Path)
+			if err != nil {
+				fmt.Printf("Proxy addition failed: %s\n", err)
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
 			}
 		default:
 			fmt.Println("Proxy type not supported")
 
 		}
 	case "del":
-		machines := []string{"http://" + string(*serverIP) + ":4001"}
+		machines := []string{"http://" + serverIP.String() + ":4001"}
+
+		fmt.Printf("%s\n", machines)
 
 		id, err := strconv.ParseInt(*Id, 10, 64)
 		if err != nil {
