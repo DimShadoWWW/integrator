@@ -33,13 +33,13 @@ func main() {
 
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case "add":
-		for {
-			err := dnslib.AddHostnameDNS(client, *docker, *id, *hostname, *domain, *port, *region, *priority)
-			if err != nil {
+		err := dnslib.AddHostnameDNS(client, *docker, *id, *hostname, *domain, *port, *region, *priority)
+		if err != nil {
 
-			}
-			time.Sleep(10 * time.Second)
 		}
+		// for {
+		// 	time.Sleep(10 * time.Second)
+		// }
 	case "del":
 		dnslib.DeleteHostnameDNS(client, *id, *hostname, *domain, *port, *region)
 	default:

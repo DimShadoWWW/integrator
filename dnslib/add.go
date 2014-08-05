@@ -81,7 +81,7 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 	}
 
 	fmt.Println("Add ", host.EtcdKey)
-	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 20); err != nil {
+	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 0); err != nil {
 		return err
 	}
 
@@ -92,24 +92,25 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 		return err
 	}
 
-	if port == 0 {
-		out_port = "0"
-	} else {
-		for i := 0; i < 10; i++ {
-			out_port, err = dockerclient.GetContainerTcpPort(container_name, port)
-			if err != nil {
-				// retry until this
-				fmt.Println(err)
-				if i == 9 {
-					return err
-				}
-			} else {
-				break
-			}
-			// wait 10 seconds to try again
-			time.Sleep(10 * time.Second)
-		}
-	}
+	out_port = "0"
+	// if port == 0 {
+	// 	out_port = "0"
+	// } else {
+	// 	for i := 0; i < 10; i++ {
+	// 		out_port, err = dockerclient.GetContainerTcpPort(container_name, port)
+	// 		if err != nil {
+	// 			// retry until this
+	// 			fmt.Println(err)
+	// 			if i == 9 {
+	// 				return err
+	// 			}
+	// 		} else {
+	// 			break
+	// 		}
+	// 		// wait 10 seconds to try again
+	// 		time.Sleep(10 * time.Second)
+	// 	}
+	// }
 
 	oport, err := strconv.Atoi(out_port)
 	if err != nil {
