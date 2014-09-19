@@ -46,20 +46,6 @@ func main() {
 			var id int64
 			var err error
 
-			if *serviceid != "" {
-				id, err = strconv.ParseInt(*serviceid, 10, 64)
-				if err != nil {
-					fmt.Println("Fatal error ", err.Error())
-					for i := 0; i < 10; i++ {
-						id = rand.Int63() + 1
-					}
-				}
-			} else {
-				for i := 0; i < 10; i++ {
-					id = rand.Int63() + 1
-				}
-			}
-
 			myServices := fleet.SystemdServiceList{}
 
 			err = myServices.FromJSON(*servicejson)
@@ -67,20 +53,38 @@ func main() {
 				panic(err)
 			}
 
-			for _, serv := range myServices.Services {
-				// fmt.Println(serv)
-				serv.Id = id
+			for inst := 0; inst < myServices.Instances; inst++ {
+				fmt.Println("Instance", inst)
 
-				service_files := fleet.CreateSystemdFiles(serv, "./")
-				// fmt.Println(fleet.CreateSystemdFiles(f, "./"))
+				if *serviceid != "" {
+					id, err = strconv.ParseInt(*serviceid, 10, 64)
+					if err != nil {
+						fmt.Println("Fatal error ", err.Error())
+						for i := 0; i < 10; i++ {
+							id = rand.Int63() + 1
+						}
+					}
+				} else {
+					for i := 0; i < 10; i++ {
+						id = rand.Int63() + 1
+					}
+				}
 
-				fmt.Println(*pretend)
-				if *pretend == false {
-					fmt.Println("DEPLOY")
-					for _, s := range service_files {
-						err = fleet.Deploy(s, "")
-						if err != nil {
-							fmt.Println(err)
+				for _, serv := range myServices.Services {
+					// fmt.Println(serv)
+					serv.Id = id
+
+					service_files := fleet.CreateSystemdFiles(serv, "./")
+					// fmt.Println(fleet.CreateSystemdFiles(f, "./"))
+
+					fmt.Println(*pretend)
+					if *pretend == false {
+						fmt.Println("DEPLOY")
+						for _, s := range service_files {
+							err = fleet.Deploy(s, "")
+							if err != nil {
+								fmt.Println(err)
+							}
 						}
 					}
 				}

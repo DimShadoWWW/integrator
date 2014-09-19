@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/dockerlib"
 	"github.com/DimShadoWWW/integrator/etcdlib"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -20,13 +21,19 @@ var (
 	out_port        string
 )
 
-func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, hostname string, domain string, port int, region string, priority int) error {
+func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, name string, hostname string, domain string, port int, region string, priority int) error {
 
 	external_domain = "production" // region used for
 	internal_domain = "docker"     // region used for
+	server_hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
 
 	out_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + external_domain + "." + region + "." + domain
-	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + region + "." + domain
+	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + server_hostname + "." + domain
+
+	fmt.Println("internal hostname", in_hostname)
 
 	dockerclient, err := dockerlib.NewDockerLib(dockeruri)
 	if err != nil {
@@ -35,18 +42,14 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 
 	// Docker internal ip address
 	fmt.Println("Adding internal DNS entry")
-	if id == 0 {
-		container_name = hostname
-	} else {
-		container_name = hostname + "-" + strconv.FormatInt(id, 10)
-	}
+	container_name = name
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 31; i++ {
 		ipaddress, err = dockerclient.GetContainerIpaddress(container_name)
 		if err != nil {
 			fmt.Println(err)
 			// retry until this
-			if i == 9 {
+			if i == 30 {
 				return err
 			}
 		} else {
@@ -138,8 +141,12 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, host
 		Entry:    []DnsEntry{entry},
 	}
 
+	if _, err = client.Client.CreateDir(strings.Join(hostpath[0:len(hostpath)-1], "/"), 20); err != nil {
+		return err
+	}
+
 	fmt.Println("Add ", host.EtcdKey)
-	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 20); err != nil {
+	if _, err = client.Client.Set(host.EtcdKey, string(json_data), 0); err != nil {
 		return err
 	}
 	return nil

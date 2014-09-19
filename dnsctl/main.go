@@ -6,7 +6,6 @@ import (
 	"github.com/DimShadoWWW/integrator/etcdlib"
 	"github.com/alecthomas/kingpin"
 	"os"
-	"time"
 )
 
 var (
@@ -15,6 +14,7 @@ var (
 	serverIP = app.Flag("server", "Etcd address").Default("127.0.0.1").IP()
 	docker   = app.Flag("docker", "docker uri").Default("unix:///var/run/docker.sock").String()
 	id       = app.Flag("id", "id for service").Required().Int64()
+	name     = app.Flag("name", "docker container's name").Required().String()
 	hostname = app.Flag("hostname", "hostname for service").Required().String()
 	domain   = app.Flag("domain", "domain for service").Required().String()
 	region   = app.Flag("region", "region for service").Required().String()
@@ -33,7 +33,7 @@ func main() {
 
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case "add":
-		err := dnslib.AddHostnameDNS(client, *docker, *id, *hostname, *domain, *port, *region, *priority)
+		err := dnslib.AddHostnameDNS(client, *docker, *id, *name, *hostname, *domain, *port, *region, *priority)
 		if err != nil {
 
 		}
@@ -41,7 +41,7 @@ func main() {
 		// 	time.Sleep(10 * time.Second)
 		// }
 	case "del":
-		dnslib.DeleteHostnameDNS(client, *id, *hostname, *domain, *port, *region)
+		dnslib.DeleteHostnameDNS(client, *id, *name, *hostname, *domain, *port, *region)
 	default:
 		fmt.Println("Command not found")
 		os.Exit(4)

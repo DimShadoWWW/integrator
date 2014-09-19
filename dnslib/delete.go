@@ -3,19 +3,24 @@ package dnslib
 import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/etcdlib"
+	"os"
 	"strconv"
 	"strings"
 )
 
-func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, hostname string, domain string, port int, region string) error {
+func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, name string, hostname string, domain string, port int, region string) error {
 
 	external_domain = "production" // region used for
 	internal_domain = "docker"     // region used for
+	server_hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+
 	out_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + external_domain + "." + region + "." + domain
-	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + region + "." + domain
+	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + server_hostname + "." + domain
 
 	// Docker internal ip address
-
 	hostpath := strings.Split(in_hostname, ".")
 	for i, j := 0, len(hostpath)-1; i < j; i, j = i+1, j-1 {
 		hostpath[i], hostpath[j] = hostpath[j], hostpath[i]

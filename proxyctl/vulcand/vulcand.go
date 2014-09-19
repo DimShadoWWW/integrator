@@ -43,10 +43,11 @@ func VulcandHostAdd(etcdnodes []string, dockeruri string, service fleet.SystemdS
 		return err
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 31; i++ {
 		ipaddress, err = dockerclient.GetContainerIpaddress(container_name)
 		if err != nil {
-			if i == 9 {
+			// retry until this
+			if i == 30 {
 				return err
 			}
 		} else {
