@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/DimShadoWWW/integrator/dockerlib"
+	"io/ioutil"
+	"path/filepath"
 	// "github.com/DimShadoWWW/integrator/etcdlib"
 	"github.com/GeertJohan/go.rice"
 	"github.com/coreos/go-etcd/etcd"
@@ -21,12 +23,16 @@ import log "github.com/cihub/seelog"
 import _ "net/http/pprof"
 
 type Configuration struct {
+	Basedir string
 	Address string
 	Port    string
 	ApiKey  string
 }
 
 var (
+	// path to templates folder
+	basedir string
+
 	// address to access docker API
 	address string
 
@@ -43,7 +49,7 @@ func main() {
 	var logConfig = `
  	<seelog type="asyncloop" minlevel="info">
  	<outputs>
- 	<file path="/home/core/integrator.log" formatid="main"/>
+ 	<file path="integrator.log" formatid="main"/>
  	</outputs>
  	<formats>
  	<format id="main" format="%Date %Time [%Level] %Msg%n"/>
@@ -60,6 +66,7 @@ func main() {
 
 	defer log.Flush()
 
+	defaultBasedir := "/home/core/integrator_units/"
 	defaultAddress := "unix:///var/run/docker.sock"
 	defaultPort := "8080"
 	defaultAPIKey := "CHANGE_ME"
@@ -72,17 +79,20 @@ func main() {
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
 		}
+		defaultBasedir = configuration.Basedir
 		defaultAddress = configuration.Address
 		defaultPort = configuration.Port
 		defaultAPIKey = configuration.ApiKey
 	}
 
 	// parse command line flags
+	flag.StringVar(&basedir, "basedir", defaultBasedir, "fullpath to folder with templates")
 	flag.StringVar(&address, "address", defaultAddress, "docker address")
-	flag.StringVar(&port, "port", defaultPort, "docker address")
-	flag.StringVar(&APIKey, "apikey", defaultAPIKey, "docker address")
+	flag.StringVar(&port, "port", defaultPort, "port to listen on")
+	flag.StringVar(&APIKey, "apikey", defaultAPIKey, "ApiKey for access")
 	flag.Parse()
 
+	color.Println(basedir)
 	color.Println(APIKey)
 	color.Println(address)
 	color.Println(port)
@@ -114,7 +124,10 @@ func main() {
 	r.HandleFunc("/api/containers/stop/{id}", StopContainerHandler)
 	r.HandleFunc("/api/containers/start/{id}", StartContainerHandler)
 	r.HandleFunc("/api/containers/clean", CleanContainersHandler)
-	r.HandleFunc("/api/containers/new", RunContainerHandler)
+	r.HandleFunc("/api/templates/list", ListTemplateHandler)
+	r.HandleFunc("/api/templates/read/{id}", ReadTemplateHandler)
+	r.HandleFunc("/api/templates/save/{id}", SaveTemplateHandler)
+	// r.HandleFunc("/api/containers/new", ReadTemplateHandler)
 	r.HandleFunc("/api/clean", CleanHandler)
 	r.HandleFunc("/api/images", StatusImageHandler)
 	r.HandleFunc("/api/images/build/{name}", BuildImageHandler)
@@ -163,6 +176,8 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 		rip, err := net.ResolveTCPAddr("tcp", a+":0")
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		color.Println("@bACCESS from: "+color.ResetCode, rip.IP)
@@ -170,6 +185,8 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 		cont_all, err := client.GetContainers(true)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		var results Status
@@ -197,6 +214,8 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 		images, err := client.GetImages()
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		good := 0
@@ -224,12 +243,16 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(results)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		var r1 interface{}
 		err = json.Unmarshal(result, &r1)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
@@ -243,16 +266,135 @@ func StatusHandler(c http.ResponseWriter, r *http.Request) {
 }
 
 //Containers
+func ListTemplateHandler(c http.ResponseWriter, r *http.Request) {
+	if checkaccess(r.Header.Get("API-Access")) {
+		fileInfo, err := os.Stat(basedir)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
+		}
+		if fileInfo.IsDir() {
+			var files []string
+			files_in_dir, _ := ioutil.ReadDir(basedir)
+			for _, f := range files_in_dir {
+				if f.Mode().IsRegular() && filepath.Ext(f.Name()) == ".json" {
+					files = append(files, strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())))
+				}
+			}
+
+			result, err := json.Marshal(files)
+			if err != nil {
+				color.Errorf("@bERROR: "+color.ResetCode, err)
+				ReturnsEmpty(c, r)
+				return
+			}
+			c.Header().Set("Content-Length", strconv.Itoa(len(result)))
+			c.Header().Set("Content-Type", "application/json")
+			io.WriteString(c, string(result))
+		}
+
+		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+	}
+}
+
+//Containers
+func ReturnsEmpty(c http.ResponseWriter, r *http.Request) {
+	if checkaccess(r.Header.Get("API-Access")) {
+		c.Header().Set("Content-Length", strconv.Itoa(4))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, "{}")
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+	}
+}
+
+//Containers
+func ReadTemplateHandler(c http.ResponseWriter, r *http.Request) {
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		filename := basedir + "/" + id + ".json"
+
+		fileInfo, err := os.Stat(filename)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
+		}
+		if fileInfo.Mode().IsRegular() {
+			content, err := ioutil.ReadFile(filename)
+			if err != nil {
+				color.Errorf("@bERROR: "+color.ResetCode, err)
+				ReturnsEmpty(c, r)
+				return
+			} else {
+				c.Header().Set("Content-Length", strconv.Itoa(len(content)))
+				c.Header().Set("Content-Type", "application/json")
+				io.WriteString(c, string(content))
+			}
+		}
+
+		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+	}
+}
+
+//Containers
+func SaveTemplateHandler(c http.ResponseWriter, r *http.Request) {
+	if checkaccess(r.Header.Get("API-Access")) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+		content := vars["content"]
+
+		filename := basedir + "/" + id + ".json"
+		f, err := os.Create(filename)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
+		}
+		_, err = io.WriteString(f, content)
+		if err != nil {
+			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
+		}
+		f.Close()
+
+		c.Header().Set("Content-Length", strconv.Itoa(2))
+		c.Header().Set("Content-Type", "application/json")
+		io.WriteString(c, "OK")
+
+		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
+	} else {
+		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+	}
+}
+
+//Containers
 func StatusContainerHandler(c http.ResponseWriter, r *http.Request) {
 	if checkaccess(r.Header.Get("API-Access")) {
 		cont_all, err := client.GetContainers(true)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		result, err := json.Marshal(cont_all)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
@@ -280,6 +422,8 @@ func StartContainerHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -305,6 +449,8 @@ func RunContainerHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -331,6 +477,8 @@ func StopContainerHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -356,6 +504,8 @@ func DelContainerHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -375,6 +525,8 @@ func CleanContainersHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -391,11 +543,15 @@ func StatusImageHandler(c http.ResponseWriter, r *http.Request) {
 		cont_all, err := client.GetImages()
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		result, err := json.Marshal(cont_all)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
@@ -425,6 +581,8 @@ func BuildImageHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -450,6 +608,8 @@ func DelImageHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -469,6 +629,8 @@ func CleanImagesHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")
@@ -491,6 +653,8 @@ func CleanHandler(c http.ResponseWriter, r *http.Request) {
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
 		}
 		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
 		c.Header().Set("Content-Type", "application/json")

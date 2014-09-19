@@ -99,3 +99,7 @@ body {
   display: inline-block;
   border-radius: 50%;
 }
+
+.modal {
+  background-color: #ddd;
+}

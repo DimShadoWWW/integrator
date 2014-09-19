@@ -1,0 +1,411 @@
+{
+  "schema": {
+    "Services": {
+      "items": {
+        "type": "object",
+        "title": "Service",
+        "properties": {
+          "Id": {
+            "type": "integer",
+            "title": "Id",
+            "id": "Id",
+            "default": 0
+          },
+          "Name": {
+            "required": true,
+            "type": "string",
+            "title": "Name",
+            "id": "Name"
+          },
+          "Description": {
+            "required": true,
+            "type": "string",
+            "title": "Description",
+            "id": "Description"
+          },
+          "Command": {
+            "required": true,
+            "type": "string",
+            "title": "Command",
+            "id": "Command"
+          },
+          "ImageName": {
+            "required": true,
+            "type": "string",
+            "title": "Image name",
+            "id": "ImageName"
+          },
+          "Hostname": {
+            "required": true,
+            "type": "string",
+            "title": "Hostname",
+            "id": "Hostname"
+          },
+          "Domain": {
+            "required": true,
+            "type": "string",
+            "title": "Domain",
+            "id": "Domain",
+            "default": "local"
+          },
+          "Conflicts": {
+            "required": false,
+            "type": "array",
+            "title": "Conflicts",
+            "id": "Conflicts",
+            "items": {
+              "type": "string"
+            }
+          },
+          "Deps": {
+            "required": false,
+            "type": "array",
+            "title": "Deps",
+            "id": "Deps",
+            "items": {
+              "type": "string",
+              "title": "Deps"
+            }
+          },
+          "Ports": {
+            "items": {
+              "required": false,
+              "type": "object",
+              "id": "0",
+              "properties": {
+                "Protocol": {
+                  "required": false,
+                  "type": "string",
+                  "title": "Protocol",
+                  "id": "Protocol"
+                },
+                "Id": {
+                  "required": false,
+                  "type": "integer",
+                  "title": "Id",
+                  "id": "Id",
+                  "default": 0
+                },
+                "ContainerPort": {
+                  "required": true,
+                  "type": "integer",
+                  "title": "ContainerPort",
+                  "id": "ContainerPort"
+                },
+                "HostPort": {
+                  "required": false,
+                  "type": "integer",
+                  "title": "HostPort",
+                  "id": "HostPort"
+                }
+              }
+            },
+            "required": true,
+            "type": "array",
+            "title": "Ports",
+            "id": "Ports"
+          },
+          "Volumes": {
+            "items": {
+              "required": false,
+              "type": "object",
+              "id": "0",
+              "properties": {
+                "Id": {
+                  "required": false,
+                  "type": "integer",
+                  "title": "Id",
+                  "id": "Id",
+                  "default": 0
+                },
+                "ContainerDir": {
+                  "required": true,
+                  "type": "string",
+                  "title": "ContainerDir",
+                  "id": "ContainerDir"
+                },
+                "LocalDir": {
+                  "required": true,
+                  "type": "string",
+                  "title": "LocalDir",
+                  "id": "LocalDir"
+                }
+              }
+            },
+            "required": false,
+            "type": "array",
+            "title": "Volumes",
+            "id": "Volumes"
+          },
+          "Variables": {
+            "required": false,
+            "type": "array",
+            "title": "Variable",
+            "id": "Variable",
+            "items": {
+              "type": "object",
+              "title": "Variable",
+              "properties": {
+                "Id": {
+                  "required": false,
+                  "type": "integer",
+                  "title": "Id",
+                  "id": "Id",
+                  "default": 0
+                },
+                "Name": {
+                  "type": "string",
+                  "title": "Name",
+                  "required": true
+                },
+                "Value": {
+                  "type": "string",
+                  "title": "Value",
+                  "required": false
+                }
+              }
+            }
+          },
+          "Links": {
+            "required": false,
+            "type": "array",
+            "title": "Links",
+            "id": "Links",
+            "items": {
+              "type": "object",
+              "title": "Link",
+              "properties": {
+                "Id": {
+                  "required": false,
+                  "type": "integer",
+                  "title": "Id",
+                  "id": "Id",
+                  "default": 0
+                },
+                "Name": {
+                  "type": "string",
+                  "title": "Name",
+                  "required": true
+                },
+                "Alias": {
+                  "type": "string",
+                  "title": "Alias",
+                  "required": true
+                }
+              }
+            }
+          },
+          "Privileged": {
+            "required": false,
+            "type": "boolean",
+            "title": "Privileged",
+            "id": "Privileged"
+          },
+          "Priority": {
+            "required": true,
+            "type": "integer",
+            "title": "Priority",
+            "id": "Priority"
+          },
+          "HttpPort": {
+            "required": true,
+            "type": "integer",
+            "title": "HttpPort",
+            "id": "HttpPort"
+          },
+          "Region": {
+            "required": true,
+            "type": "string",
+            "title": "Region",
+            "id": "Region",
+            "default": "cloud"
+          },
+          "Memory": {
+            "required": false,
+            "type": "string",
+            "title": "Memory",
+            "id": "Memory"
+          },
+          "Instances": {
+            "required": true,
+            "type": "integer",
+            "title": "Instances",
+            "id": "Instances",
+            "default": 1
+          },
+          "Global": {
+            "required": true,
+            "type": "boolean",
+            "title": "Global",
+            "id": "Global",
+            "default": false
+          },
+          "MachineID": {
+            "required": true,
+            "type": "string",
+            "title": "MachineID",
+            "id": "MachineID"
+          },
+          "MachineMetadata": {
+            "required": true,
+            "type": "string",
+            "title": "MachineMetadata",
+            "id": "MachineMetadata"
+          }
+        }
+      },
+      "type": "array"
+    }
+  },
+  "form": [
+    {
+      "type": "array",
+      "items": {
+        "type": "section",
+        "title": "General Info",
+        "items": [
+          "Services[].Name",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Container unique name <em>(You can use '_ID' at the end to include an auto-generated ID)</em></strong>"
+          },
+          "Services[].Description",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Container description</strong>"
+          },
+          "Services[].ImageName",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Image name used for this container</strong>"
+          },
+          "Services[].Region",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Region<em>(This is used for the DNS name: ...REGION.DOMAIN)</em></strong>"
+          },
+          "Services[].Domain",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Domain<em>(This is used for the DNS name: ...REGION.DOMAIN)</em></strong>"
+          },
+          "Services[].Hostname",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Hostname<em>(You can use '_ID' at the end to include an auto-generated ID)</em></strong>"
+          },
+          "Services[].Privileged",
+          {
+            "type": "help",
+            "helpvalue": "<strong>This container is privileged?</strong>"
+          },
+          "Services[].Command",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Command to run</strong>"
+          },
+          "Services[].HttpPort",
+          {
+            "type": "help",
+            "helpvalue": "<strong>HTTP port<em>(This will be the proxied port)</em></strong>"
+          },
+          "Services[].Priority",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Priority of this container in fleet</strong>"
+          },
+          {
+            "type": "tabarray",
+            "items": [
+              {
+                "type": "section",
+                "items": [
+                  "Services[].Links[].Name",
+                  "Services[].Links[].Alias"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tabarray",
+            "items": [
+              {
+                "type": "section",
+                "items": [
+                  "Services[].Variables[].Name",
+                  "Services[].Variables[].Value"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tabarray",
+            "items": [
+              {
+                "type": "section",
+                "items": [
+                  "Services[].Ports[].Protocol",
+                  "Services[].Ports[].ContainerPort",
+                  "Services[].Ports[].HostPort"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tabarray",
+            "items": [
+              {
+                "type": "section",
+                "items": [
+                  "Services[].Volumes[].ContainerDir",
+                  "Services[].Volumes[].LocalDir"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "tabarray",
+            "items": [
+              {
+                "type": "section",
+                "items": [
+                  "Services[].Links[].Name",
+                  "Services[].Links[].Alias"
+                ]
+              }
+            ]
+          },
+          "Services[].Memory",
+          {
+            "type": "help",
+            "helpvalue": "<strong>Memory constrain</strong>"
+          },
+          "Services[].Instances",
+          {
+            "type": "help",
+            "helpvalue": "<strong>How many instances to run?</strong>"
+          },
+          "Services[].Global",
+          {
+            "type": "help",
+            "helpvalue": "<strong>This has to run in all nodes?</strong>"
+          },
+          "Services[].MachineID",
+          {
+            "type": "help",
+            "helpvalue": "<strong>This has to run only in this machine ID</strong>"
+          },
+          "Services[].MachineMetadata",
+          {
+            "type": "help",
+            "helpvalue": "<strong>This has to run only in machines with this metadata</strong>"
+          }
+        ]
+      }
+    },
+    {
+      "type": "submit",
+      "title": "Save"
+    }
+  ]
+}
