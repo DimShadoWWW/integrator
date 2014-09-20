@@ -29,21 +29,8 @@ function fetchData() {
 }
 
 // $('#editor').hide();
-$('#editor').modal('hide');
+// $('#editor').modal('hide');
 fetchData();
-
-var formObject = {
-    schema: {},
-    form: [],
-    "onSubmitValid": function(values) {
-        // Callback function called upon form submission when values are valid
-        window.alert('Form submitted. Values object:\n' +
-            JSON.stringify(values, null, 2));
-        $("#form").html("");
-        $('#editor').hide();
-    }
-};
-
 
 /**
  * Extracts a potential form to load from query string
@@ -71,8 +58,45 @@ var generateForm = function() {
 
 };
 
+function RunTemplate(name) {
+        $.ajax({
+            url: "/api/templates/run/" + name,
+            type: "GET",
+            dataType: "json"
+        }).done(function(code) {
+            formObject["value"] = code;
+            formObject["form"].push({
+                "type": "submit",
+                "title": "Save",
+                "onClick": function(evt) {
+                    evt.preventDefault();
+                }
+            });
+
+            formObject["onSubmitValid"] = function(values) {
+                $.ajax({
+                    type: "POST",
+                    url: '/api/templates/save/' + name,
+                    data: JSON.stringify(values)
+                });
+                $("#form").html("");
+                $('#editor').modal('hide');
+            };
+            $('#editor').modal('show');
+            $('#form').jsonForm(formObject);
+
+        }).fail(function() {
+            window.alert('Sorry, I could not contact the server!');
+        });
+}
+
 function EditTemplate(name) {
 
+
+    var formObject = {
+        schema: {},
+        form: []
+    };
 
     function onDataReceived(series) {
         CreateButtons(series);
@@ -106,22 +130,29 @@ function EditTemplate(name) {
             type: "GET",
             dataType: "json"
         }).done(function(code) {
-
-            // $.ajax({
-            //     url: "/api/status",
-            //     type: "GET",
-            //     dataType: "json",
-            // }).done(function(code) {
-            //     // $('#editor').show();
-            // }).fail(function() {
-            //     $('#result').html('Sorry, I could not retrieve the example!');
-            // });
             formObject["value"] = code;
+            formObject["form"].push({
+                "type": "submit",
+                "title": "Save",
+                "onClick": function(evt) {
+                    evt.preventDefault();
+                }
+            });
+
+            formObject["onSubmitValid"] = function(values) {
+                $.ajax({
+                    type: "POST",
+                    url: '/api/templates/save/' + name,
+                    data: JSON.stringify(values)
+                });
+                $("#form").html("");
+                $('#editor').modal('hide');
+            };
             $('#editor').modal('show');
             $('#form').jsonForm(formObject);
 
         }).fail(function() {
-            $('#result').html('Sorry, I could not retrieve the example!');
+            window.alert('Sorry, I could not contact the server!');
         });
     }
 

@@ -24,10 +24,11 @@
             "id": "Description"
           },
           "Command": {
-            "required": true,
+            "required": false,
             "type": "string",
             "title": "Command",
-            "id": "Command"
+            "id": "Command",
+            "default": ""
           },
           "ImageName": {
             "required": true,
@@ -88,13 +89,13 @@
                 },
                 "ContainerPort": {
                   "required": true,
-                  "type": "integer",
+                  "type": "string",
                   "title": "ContainerPort",
                   "id": "ContainerPort"
                 },
                 "HostPort": {
                   "required": false,
-                  "type": "integer",
+                  "type": "string",
                   "title": "HostPort",
                   "id": "HostPort"
                 }
@@ -202,16 +203,18 @@
             "id": "Privileged"
           },
           "Priority": {
-            "required": true,
+            "required": false,
             "type": "integer",
             "title": "Priority",
-            "id": "Priority"
+            "id": "Priority",
+            "default": 0
           },
           "HttpPort": {
-            "required": true,
+            "required": false,
             "type": "integer",
             "title": "HttpPort",
-            "id": "HttpPort"
+            "id": "HttpPort",
+            "default": 0
           },
           "Region": {
             "required": true,
@@ -227,7 +230,7 @@
             "id": "Memory"
           },
           "Instances": {
-            "required": true,
+            "required": false,
             "type": "integer",
             "title": "Instances",
             "id": "Instances",
@@ -241,13 +244,13 @@
             "default": false
           },
           "MachineID": {
-            "required": true,
+            "required": false,
             "type": "string",
             "title": "MachineID",
             "id": "MachineID"
           },
           "MachineMetadata": {
-            "required": true,
+            "required": false,
             "type": "string",
             "title": "MachineMetadata",
             "id": "MachineMetadata"
@@ -402,10 +405,6 @@
           }
         ]
       }
-    },
-    {
-      "type": "submit",
-      "title": "Save"
     }
   ]
 }

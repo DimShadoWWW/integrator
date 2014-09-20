@@ -4,18 +4,18 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/DimShadoWWW/integrator/dockerlib"
-	"io/ioutil"
-	"path/filepath"
-	// "github.com/DimShadoWWW/integrator/etcdlib"
+	"github.com/DimShadoWWW/integrator/fleet"
 	"github.com/GeertJohan/go.rice"
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/gorilla/mux"
 	"github.com/wsxiaoys/terminal/color"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -30,6 +30,7 @@ type Configuration struct {
 }
 
 var (
+
 	// path to templates folder
 	basedir string
 
@@ -127,6 +128,7 @@ func main() {
 	r.HandleFunc("/api/templates/list", ListTemplateHandler)
 	r.HandleFunc("/api/templates/read/{id}", ReadTemplateHandler)
 	r.HandleFunc("/api/templates/save/{id}", SaveTemplateHandler)
+	r.HandleFunc("/api/templates/run/{id}", ReadTemplateHandler)
 	// r.HandleFunc("/api/containers/new", ReadTemplateHandler)
 	r.HandleFunc("/api/clean", CleanHandler)
 	r.HandleFunc("/api/images", StatusImageHandler)
@@ -350,18 +352,37 @@ func ReadTemplateHandler(c http.ResponseWriter, r *http.Request) {
 //Containers
 func SaveTemplateHandler(c http.ResponseWriter, r *http.Request) {
 	if checkaccess(r.Header.Get("API-Access")) {
+		color.Println("@r SAVING" + color.ResetCode)
 		vars := mux.Vars(r)
 		id := vars["id"]
-		content := vars["content"]
 
+		content, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			color.Errorf("@bERROR: Failed to read body on @rSaveTemplateHandler "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
+		}
+		var services fleet.SystemdServiceList
+		err = json.Unmarshal(content, &services)
+		if err != nil {
+			color.Errorf("@bERROR: Failed to unmarshal SystemdServiceList on @rSaveTemplateHandler "+color.ResetCode, err)
+			ReturnsEmpty(c, r)
+			return
+		}
+
+		services_str, err := json.MarshalIndent(services, "", "  ")
+		if err != nil {
+			color.Println("jerr:", err.Error())
+		}
 		filename := basedir + "/" + id + ".json"
+		color.Println("@r: writing " + filename + color.ResetCode)
 		f, err := os.Create(filename)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
 			ReturnsEmpty(c, r)
 			return
 		}
-		_, err = io.WriteString(f, content)
+		_, err = io.WriteString(f, string(services_str))
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
 			ReturnsEmpty(c, r)
