@@ -59,7 +59,8 @@ ExecStart=/home/core/dnsctl --name={{replaceId .Name .Id|lower}} --hostname={{.H
 ExecStop=/home/core/dnsctl --name={{replaceId .Name .Id|lower}} --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{hasid $name $id}} --port={{$httpport}} --priority={{.Priority}} del
 
 [X-Fleet]
-{{if .Global}}Global={{.Global}}{{else}}ConditionMachineOf={{replaceId .Name .Id}}.service{{end}}
+{{if .Global}}Global={{.Global}}
+{{if .MachineMetadata}}MachineMetadata={{.MachineMetadata}}{{end}}{{else}}ConditionMachineOf={{replaceId .Name .Id}}.service{{end}}
 `
 	proxy_service = `[Unit]
 Description={{.Description}} Proxy service
@@ -74,7 +75,8 @@ ExecStart=/home/core/proxyctl --id={{hasid $name $id}} --name={{replaceId .Name 
 ExecStop=/home/core/proxyctl --id={{hasid $name $id}} --name={{replaceId .Name .Id|lower}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} del
 
 [X-Fleet]
-{{if .Global}}Global={{.Global}}{{else}}ConditionMachineOf={{replaceId .Name .Id}}.service{{end}}
+{{if .Global}}Global={{.Global}}
+{{if .MachineMetadata}}MachineMetadata={{.MachineMetadata}}{{end}}{{else}}ConditionMachineOf={{replaceId .Name .Id}}.service{{end}}
 `
 	service_discovery = `
 [Unit]
@@ -86,7 +88,8 @@ ExecStart=/bin/sh -c "while true; do {{if .HttpPort}}/usr/bin/etcdctl set /skydn
 ExecStop=/bin/sh -c "{{if .HttpPort}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}};{{else}}{{if .Ports}}{{range .Ports}}/usr/bin/etcdctl rm /services/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$name}}-{{$id}}/{{.HostPort}};{{end}}/usr/bin/etcdctl rmdir /services/{{$hostname|lower}}.{{$domain|lower}}/{{$name}}-{{$id}}{{else}}/usr/bin/etcdctl rm /skydns/{{ printf "%s.%s.%s" $region $hostname $domain |dns2path}}/{{$id}}{{end}}{{end}}"
 
 [X-Fleet]
-{{if .Global}}Global={{.Global}}{{else}}ConditionMachineOf={{replaceId .Name .Id}}.service{{end}}
+{{if .Global}}Global={{.Global}}
+{{if .MachineMetadata}}MachineMetadata={{.MachineMetadata}}{{end}}{{else}}ConditionMachineOf={{replaceId .Name .Id}}.service{{end}}
 `
 )
 
