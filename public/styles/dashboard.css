@@ -103,3 +103,7 @@ body {
 .modal {
   background-color: #ddd;
 }
+
+.ui-dialog {
+    top: 100px !important;
+}

@@ -3,7 +3,7 @@ var iteration = 0;
 function CreateButtons(series) {
     var output = "<table class=\"table table-striped\"><thead><tr><th>Names</th><th>Actions</th></tr></thead><tbody>";
     for (var i in series) {
-        buttons = "<button type=\"button\" onclick=\"$.ajax({url: '/api/templates/start/" + series[i] + "',type: 'GET',dataType: 'json'})\" data-loading-text=\"Starting...\" class=\"btn btn-primary btn-start-cont\">Start</button>"
+        buttons = "<button type=\"button\" onclick=\"$.ajax({url: '/api/templates/run/" + series[i] + "',type: 'GET',dataType: 'json'})\" data-loading-text=\"Starting...\" class=\"btn btn-primary btn-start-cont\">Start</button>"
         buttons += "<button type=\"button\" onclick=\"EditTemplate('" + series[i] + "')\" class=\"btn btn-primary btn-del-cont\">Edit</button>"
         output += "<tr><td>" + series[i].substring(0, 12) + "</td><td>" + series[i] + "</td><td>" + buttons + "</td></tr>";
     }
@@ -59,35 +59,35 @@ var generateForm = function() {
 };
 
 function RunTemplate(name) {
-        $.ajax({
-            url: "/api/templates/run/" + name,
-            type: "GET",
-            dataType: "json"
-        }).done(function(code) {
-            formObject["value"] = code;
-            formObject["form"].push({
-                "type": "submit",
-                "title": "Save",
-                "onClick": function(evt) {
-                    evt.preventDefault();
-                }
-            });
-
-            formObject["onSubmitValid"] = function(values) {
-                $.ajax({
-                    type: "POST",
-                    url: '/api/templates/save/' + name,
-                    data: JSON.stringify(values)
-                });
-                $("#form").html("");
-                $('#editor').modal('hide');
-            };
-            $('#editor').modal('show');
-            $('#form').jsonForm(formObject);
-
-        }).fail(function() {
-            window.alert('Sorry, I could not contact the server!');
+    $.ajax({
+        url: "/api/templates/run/" + name,
+        type: "GET",
+        dataType: "json"
+    }).done(function(code) {
+        formObject["value"] = code;
+        formObject["form"].push({
+            "type": "submit",
+            "title": "Save",
+            "onClick": function(evt) {
+                evt.preventDefault();
+            }
         });
+
+        formObject["onSubmitValid"] = function(values) {
+            $.ajax({
+                type: "POST",
+                url: '/api/templates/save/' + name,
+                data: JSON.stringify(values)
+            });
+            $("#form").html("");
+            $('#editor').modal('hide');
+        };
+        $('#editor').modal('show');
+        $('#form').jsonForm(formObject);
+
+    }).fail(function() {
+        window.alert('Sorry, I could not contact the server!');
+    });
 }
 
 function EditTemplate(name) {
@@ -171,3 +171,37 @@ function EditTemplate(name) {
     // Reset result pane
 
 };
+
+// function NewTemplate() {
+//     // $("#newTemplateForm").dialog({
+//     //     buttons: [{
+//     //         text: "Ok",
+//     //         click: function() {
+//     //             $(this).dialog("close");
+//     //             EditTemplate($("#hidden-input").val());
+//     //         }
+//     //     }]
+//     // });
+//     // $("#newTemplateForm").dialog("close");
+//     // EditTemplate($("#hidden-input").val());
+// };
+
+$(function() {
+    $("#newTemplateForm").dialog({
+        title: "Template name",
+        modal: true,
+        position: { my: "center top", at: "center top", of: window },
+        buttons: [{
+            text: "Ok",
+            click: function() {
+                $(this).dialog("close");
+                EditTemplate($("#hidden-input").val());
+            }
+        }]
+    });
+    $("#newTemplateForm").dialog("close");
+    $("#new-template").click(function() {
+        // $("#hidden-input").val();
+        $("#newTemplateForm").dialog("open");
+    });
+});

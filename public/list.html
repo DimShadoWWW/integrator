@@ -5,6 +5,9 @@
     <title>Available Templates</title>
     <link rel="stylesheet" href="/styles/bootstrap.min.css">
     <link rel="stylesheet" href="/styles/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="/styles/jquery-ui.min.css">
+    <link rel="stylesheet" href="/styles/jquery-ui.structure.min.css">
+    <link rel="stylesheet" href="/styles/jquery-ui.theme.min.css">
     <link rel="stylesheet" href="/styles/dashboard.css">
 </head>
 
@@ -48,7 +51,10 @@
             </div>
             <div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
                 <h2 class="sub-header">Available templates</h2>
-                <button type="button" class="btn btn-primary" onclick="NewTemplate()">New</button>
+                <button type="button" class="btn btn-primary" id="new-template">New</button>
+                <div id="newTemplateForm" style="display:none;">
+                    <input type="text" id="hidden-input" name="bar" />
+                </div>
                 <div id="content" class="table-responsive">
                 </div>
                 <div id="editor" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="TemplateForm" aria-hidden="true">
@@ -72,11 +78,9 @@
     </div>
     <script src="/javascripts/jquery-1.11.0.min.js"></script>
     <script src="/javascripts/bootstrap.min.js"></script>
-    <script src="/javascripts/jquery.timeago.js"></script>
-    <script src="/javascripts/jquery.flot.js"></script>
-    <script src="/javascripts/jquery.flot.pie.js"></script>
     <script src="/javascripts/underscore-min.js"></script>
     <script src="/javascripts/jsonform.js"></script>
+    <script src="/javascripts/jquery-ui.min.js"></script>
     <script src="/javascripts/application.js" type="text/javascript" charset="utf-8"></script>
     <script src="/javascripts/application-templates.js" type="text/javascript" charset="utf-8" async defer></script>
 </body>

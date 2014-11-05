@@ -61,7 +61,7 @@
           "Deps": {
             "required": false,
             "type": "array",
-            "title": "Deps",
+            "title": "Dependencies",
             "id": "Deps",
             "items": {
               "type": "string",
@@ -319,11 +319,16 @@
           },
           {
             "type": "tabarray",
+            "title": "Container links:",
             "items": [
               {
                 "type": "section",
+                "legend": "{{idx}}. {{value}}",
                 "items": [
-                  "Services[].Links[].Name",
+                  {
+                    "key": "Services[].Links[].Name",
+                    "valueInLegend": true
+                  },
                   "Services[].Links[].Alias"
                 ]
               }
@@ -331,11 +336,16 @@
           },
           {
             "type": "tabarray",
+            "title": "Variables passed to container:",
             "items": [
               {
                 "type": "section",
+                "legend": "{{idx}}. {{value}}",
                 "items": [
-                  "Services[].Variables[].Name",
+                  {
+                    "key": "Services[].Variables[].Name",
+                    "valueInLegend": true
+                  },
                   "Services[].Variables[].Value"
                 ]
               }
@@ -343,12 +353,17 @@
           },
           {
             "type": "tabarray",
+            "title": "Open ports relations:",
             "items": [
               {
                 "type": "section",
+                "legend": "{{idx}}. {{value}}",
                 "items": [
                   "Services[].Ports[].Protocol",
-                  "Services[].Ports[].ContainerPort",
+                  {
+                    "key": "Services[].Ports[].ContainerPort",
+                    "valueInLegend": true
+                  },
                   "Services[].Ports[].HostPort"
                 ]
               }
@@ -356,24 +371,17 @@
           },
           {
             "type": "tabarray",
+            "title": "Volumes mounted on container:",
             "items": [
               {
                 "type": "section",
+                "legend": "{{idx}}. {{value}}",
                 "items": [
-                  "Services[].Volumes[].ContainerDir",
+                  {
+                    "key": "Services[].Volumes[].ContainerDir",
+                    "valueInLegend": true
+                  },
                   "Services[].Volumes[].LocalDir"
-                ]
-              }
-            ]
-          },
-          {
-            "type": "tabarray",
-            "items": [
-              {
-                "type": "section",
-                "items": [
-                  "Services[].Links[].Name",
-                  "Services[].Links[].Alias"
                 ]
               }
             ]

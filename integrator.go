@@ -1,6 +1,7 @@
 package main
 
 import (
+    "bytes"
 	"encoding/json"
 	"flag"
 	"github.com/DimShadoWWW/integrator/dockerlib"
@@ -15,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+    "os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -128,7 +130,7 @@ func main() {
 	r.HandleFunc("/api/templates/list", ListTemplateHandler)
 	r.HandleFunc("/api/templates/read/{id}", ReadTemplateHandler)
 	r.HandleFunc("/api/templates/save/{id}", SaveTemplateHandler)
-	r.HandleFunc("/api/templates/run/{id}", ReadTemplateHandler)
+    r.HandleFunc("/api/templates/run/{id}", RunTemplateHandler)
 	// r.HandleFunc("/api/containers/new", ReadTemplateHandler)
 	r.HandleFunc("/api/clean", CleanHandler)
 	r.HandleFunc("/api/images", StatusImageHandler)
@@ -326,7 +328,10 @@ func ReadTemplateHandler(c http.ResponseWriter, r *http.Request) {
 		fileInfo, err := os.Stat(filename)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			ReturnsEmpty(c, r)
+            content := "{}"
+            c.Header().Set("Content-Length", strconv.Itoa(len(content)))
+            c.Header().Set("Content-Type", "application/json")
+            io.WriteString(c, string(content))
 			return
 		}
 		if fileInfo.Mode().IsRegular() {
@@ -399,6 +404,51 @@ func SaveTemplateHandler(c http.ResponseWriter, r *http.Request) {
 		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
 		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
 	}
+}
+
+func RunTemplateHandler(c http.ResponseWriter, r *http.Request) {
+    if checkaccess(r.Header.Get("API-Access")) {
+        vars := mux.Vars(r)
+        id := vars["id"]
+
+        filename := basedir + "/" + id + ".json"
+
+        fileInfo, err := os.Stat(filename)
+        if err != nil {
+            color.Errorf("@bERROR: "+color.ResetCode, err)
+            content := "{}"
+            c.Header().Set("Content-Length", strconv.Itoa(len(content)))
+            c.Header().Set("Content-Type", "application/json")
+            io.WriteString(c, string(content))
+            return
+        }
+        if fileInfo.Mode().IsRegular() {
+
+            color.Println("@bStarting: "+color.ResetCode, id)
+            cmd := exec.Command("/home/core/integratorctl", "add", filename)
+
+            var stderr bytes.Buffer
+            cmd.Stderr = &stderr
+
+            err = cmd.Run()
+            if err != nil {
+                color.Errorf("@bERROR: "+color.ResetCode, err)
+                color.Printf("@bstderr: "+color.ResetCode, stderr.String())
+                c.Header().Set("Content-Length", err.Error())
+                c.Header().Set("Content-Type", "application/json")
+                io.WriteString(c, err.Error())
+            } else {
+                content := "OK"
+                c.Header().Set("Content-Length", strconv.Itoa(len(content)))
+                c.Header().Set("Content-Type", "application/json")
+                io.WriteString(c, string(content))
+            }
+        }
+
+    } else {
+        http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
+        color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+    }
 }
 
 //Containers

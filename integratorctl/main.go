@@ -52,6 +52,9 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
+            if myServices.Instances == 0 {
+                myServices.Instances = 1
+            }
 
 			for inst := 0; inst < myServices.Instances; inst++ {
 				fmt.Println("Instance", inst)
