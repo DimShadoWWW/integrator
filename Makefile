@@ -1,8 +1,13 @@
 
-all: build
+all: deps build
 
 deps:
+	apt-get update && apt-get install -y zip
 	go get github.com/GeertJohan/go.rice
+	go get github.com/GeertJohan/go.incremental
+	go get github.com/akavel/rsrc
+	go get github.com/jessevdk/go-flags
+	go install github.com/GeertJohan/go.rice/rice
 	go get github.com/gorilla/mux
 	go get github.com/wsxiaoys/terminal/color
 	go get github.com/deckarep/golang-set
@@ -15,12 +20,13 @@ deps:
 	go get github.com/coreos/go-etcd/etcd
 	go get github.com/cihub/seelog
 	go get github.com/alecthomas/kingpin
+	go get gopkg.in/redis.v2
 
 build: builddnsctl buildproxyctl buildintegratorctl buildintegrator
 
 buildintegrator:
 	go build
-	rice append --exec integrator
+	/go/bin/rice append --exec integrator
 	mv integrator bin
 
 builddnsctl:
