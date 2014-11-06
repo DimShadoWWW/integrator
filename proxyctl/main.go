@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/fleet"
 	"github.com/DimShadoWWW/integrator/proxyctl/hipache"
-	"github.com/DimShadoWWW/integrator/proxyctl/vulcand"
+//	"github.com/DimShadoWWW/integrator/proxyctl/vulcand"
 	"github.com/alecthomas/kingpin"
 	"os"
 	"strconv"
@@ -51,13 +51,13 @@ func main() {
 		}
 
 		switch {
-		case *proxytype == "vulcand":
-			err = vulcand.VulcandHostAdd(machines, *docker, f, *Port, *Path)
-			if err != nil {
-				fmt.Printf("Proxy addition failed: %s\n", err)
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
+//		case *proxytype == "vulcand":
+//			err = vulcand.VulcandHostAdd(machines, *docker, f, *Port, *Path)
+//			if err != nil {
+//				fmt.Printf("Proxy addition failed: %s\n", err)
+//				fmt.Fprintln(os.Stderr, err)
+//				os.Exit(1)
+//			}
 		case *proxytype == "hipache":
 			err = hipache.HostAdd(*redisAccess, *docker, f, *Port, *Path)
 			if err != nil {
@@ -89,13 +89,13 @@ func main() {
 		}
 
 		switch {
-		case *proxytype == "vulcand":
-			err = vulcand.VulcandHostDel(machines, *docker, f, *Port, *Path)
-			if err != nil {
-				fmt.Printf("Proxy deletion failed: %s\n", err)
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(2)
-			}
+//		case *proxytype == "vulcand":
+//			err = vulcand.VulcandHostDel(machines, *docker, f, *Port, *Path)
+//			if err != nil {
+//				fmt.Printf("Proxy deletion failed: %s\n", err)
+//				fmt.Fprintln(os.Stderr, err)
+//				os.Exit(2)
+//			}
 		case *proxytype == "hipache":
 			err = hipache.HostDel(*redisAccess, *docker, f, *Port, *Path)
 			if err != nil {
