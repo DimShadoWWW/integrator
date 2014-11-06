@@ -1,8 +1,17 @@
 
+have_apt := $(wildcard /usr/bin/apt-get)
+have_zip := $(wildcard /usr/bin/zip)
+
 all: deps build
 
 deps:
-	apt-get update && apt-get install -y zip
+	ifeq ($(strip $(have_zip)),)
+		ifeq ($(strip $(have_apt)),)
+			yum install -y zip
+		else
+			apt-get update && apt-get install -y zip
+		endif
+	endif
 	go get github.com/GeertJohan/go.rice
 	go get github.com/GeertJohan/go.incremental
 	go get github.com/akavel/rsrc
