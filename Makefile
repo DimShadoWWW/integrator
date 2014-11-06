@@ -26,7 +26,7 @@ build: builddnsctl buildproxyctl buildintegratorctl buildintegrator
 
 buildintegrator:
 	go build
-	rice append --exec integrator
+	/go/bin/rice append --exec integrator
 	mv integrator bin
 
 builddnsctl:
