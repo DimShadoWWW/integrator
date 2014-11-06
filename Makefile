@@ -5,7 +5,7 @@ have_zip := $(shell which zip)
 all: deps build
 
 deps:
-	ifeq ($(strip $(have_zip)),)
+	ifeq ($(shell which zip),"")
 		apt-get update && apt-get install -y zip
 	endif
 	go get github.com/GeertJohan/go.rice
