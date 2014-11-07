@@ -1,4 +1,23 @@
 image: bradrydzewski/go:1.3
+cache:
+  - /go/src/github.com/GeertJohan/go.rice
+  - /go/src/github.com/GeertJohan/go.incremental
+  - /go/src/github.com/akavel/rsrc
+  - /go/src/github.com/jessevdk/go-flags
+  - /go/src/github.com/gorilla/mux
+  - /go/src/github.com/wsxiaoys/terminal/color
+  - /go/src/github.com/deckarep/golang-set
+  - /go/src/github.com/dotcloud/docker/engine
+  - /go/src/github.com/dotcloud/docker/nat
+  - /go/src/github.com/dotcloud/docker/utils
+  - /go/src/github.com/fsouza/go-dockerclient
+  - /go/src/github.com/stevedomin/termtable
+  - /go/src/github.com/coreos/locksmith/lock
+  - /go/src/github.com/coreos/go-etcd/etcd
+  - /go/src/github.com/cihub/seelog
+  - /go/src/github.com/alecthomas/kingpin
+  - /go/src/gopkg.in/redis.v2
+
 script:
   - make
 notify:

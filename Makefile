@@ -5,24 +5,24 @@ have_zip := $(shell which zip)
 all: deps build
 
 deps:
-	go get github.com/GeertJohan/go.rice
-	go get github.com/GeertJohan/go.incremental
-	go get github.com/akavel/rsrc
-	go get github.com/jessevdk/go-flags
+	go get -u github.com/GeertJohan/go.rice
+	go get -u github.com/GeertJohan/go.incremental
+	go get -u github.com/akavel/rsrc
+	go get -u github.com/jessevdk/go-flags
 	go install github.com/GeertJohan/go.rice/rice
-	go get github.com/gorilla/mux
-	go get github.com/wsxiaoys/terminal/color
-	go get github.com/deckarep/golang-set
-	go get github.com/dotcloud/docker/engine
-	go get github.com/dotcloud/docker/nat
-	go get github.com/dotcloud/docker/utils
-	go get github.com/fsouza/go-dockerclient
-	go get github.com/stevedomin/termtable
-	go get github.com/coreos/locksmith/lock
-	go get github.com/coreos/go-etcd/etcd
-	go get github.com/cihub/seelog
-	go get github.com/alecthomas/kingpin
-	go get gopkg.in/redis.v2
+	go get -u github.com/gorilla/mux
+	go get -u github.com/wsxiaoys/terminal/color
+	go get -u github.com/deckarep/golang-set
+	go get -u github.com/dotcloud/docker/engine
+	go get -u github.com/dotcloud/docker/nat
+	go get -u github.com/dotcloud/docker/utils
+	go get -u github.com/fsouza/go-dockerclient
+	go get -u github.com/stevedomin/termtable
+	go get -u github.com/coreos/locksmith/lock
+	go get -u github.com/coreos/go-etcd/etcd
+	go get -u github.com/cihub/seelog
+	go get -u github.com/alecthomas/kingpin
+	go get -u gopkg.in/redis.v2
 
 build: builddnsctl buildproxyctl buildintegratorctl buildintegrator
 
