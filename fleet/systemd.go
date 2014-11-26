@@ -30,10 +30,13 @@ Requires={{replaceId $element $id}}.service
 {{end}}
 [Service]
 Restart=always
-RestartSec=1
+RestartSec=3
 TimeoutSec=0
+ExecStartPre=/bin/sh -c '/usr/bin/docker history {{.ImageName}} >/dev/null || docker pull {{.ImageName}}'
 ExecStart=/bin/bash -c '/usr/bin/docker start -a {{replaceId .Name .Id|lower}} || /usr/bin/docker run --name {{replaceId .Name .Id|lower}}{{if .Hostname}} -h {{.Hostname|lower}}.production.{{.Region|lower}}.{{.Domain|lower}} {{end}}{{if .Privileged}} --privileged {{end}}{{if.Volumes}}{{range .Volumes}}{{.|volumeExpand}}{{end}}{{end}}{{if .Ports}}{{range .Ports}}{{.|portExpand}}{{end}}{{end}}{{if .Variables}}{{varExpand .Variables}}{{end}}{{if .Links}}{{range $index, $element := .Links}}{{linkExpand $element $id}}{{end}}{{end}} {{if .Memory}}--memory="{{.Memory}}"{{end}} --dns {{internalip}} --dns 8.8.8.8 --dns 8.8.4.4 {{.ImageName}} {{.Command}}'
-ExecStop=/bin/bash -c '/usr/bin/docker stop {{replaceId .Name .Id|lower}};/usr/bin/docker rm {{replaceId .Name .Id|lower}}'
+ExecStartPost=/home/core/dnsctl --name={{replaceId .Name .Id|lower}} --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{hasid $name $id}} --port={{$httpport}} --priority={{.Priority}} {{if .Iface}}--iface={{.Iface}}{{end}} add
+{{if .Proxy}}ExecStartPost=/home/core/proxyctl --id={{hasid $name $id}} --name={{replaceId .Name .Id|lower}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} add{{end}}
+ExecStop=/bin/bash -c '/home/core/dnsctl --name={{replaceId .Name .Id|lower}} --hostname={{.Hostname|lower}} --domain={{.Domain|lower}} --region={{.Region|lower}} --id={{hasid $name $id}} --port={{$httpport}} --priority={{.Priority}} del{{if .Proxy}};/home/core/proxyctl --id={{hasid $name $id}} --name={{replaceId .Name .Id|lower}} --hostname={{$hostname|lower}} --domain={{$domain|lower}} --region={{$region|lower}} --port={{$httpport}} del{{end}};/usr/bin/docker stop {{replaceId .Name .Id|lower}};/usr/bin/docker rm {{replaceId .Name .Id|lower}}'
 
 [X-Fleet]
 {{if .Global}}Global={{.Global}}
@@ -121,6 +124,8 @@ type SystemdService struct {
 	ImageName       string
 	Hostname        string
 	Domain          string
+	Proxy           bool
+	Iface           string
 	Conflicts       []string
 	Deps            []string
 	Ports           []Port
@@ -290,64 +295,64 @@ func CreateSystemdFiles(system SystemdService, outdir string) []string {
 	checkError(err)
 	service_files := []string{outdir + fname}
 
-	// dns
-	color.Println("@bCreating systemd unit file for dns control of service: "+color.ResetCode, system.Name)
-	t = template.New("Systemd dns service")
-	// t.Delims("{{", "}}\n")
-	t = t.Funcs(template.FuncMap{
-		"volumeExpand": VolumeExpander,
-		"portExpand":   PortExpander,
-		"linkExpand":   LinkExpander,
-		"varExpand":    VarExpander,
-		"lower":        Lower,
-		"replaceId":    ReplaceId,
-		"dns2path":     Dns2Path,
-		"hasid":        HasId,
-		"internalip":   getInternalIP,
-	})
-	t, err = t.Parse(dns_service)
-	checkError(err)
+	// // dns
+	// color.Println("@bCreating systemd unit file for dns control of service: "+color.ResetCode, system.Name)
+	// t = template.New("Systemd dns service")
+	// // t.Delims("{{", "}}\n")
+	// t = t.Funcs(template.FuncMap{
+	// 	"volumeExpand": VolumeExpander,
+	// 	"portExpand":   PortExpander,
+	// 	"linkExpand":   LinkExpander,
+	// 	"varExpand":    VarExpander,
+	// 	"lower":        Lower,
+	// 	"replaceId":    ReplaceId,
+	// 	"dns2path":     Dns2Path,
+	// 	"hasid":        HasId,
+	// 	"internalip":   getInternalIP,
+	// })
+	// t, err = t.Parse(dns_service)
+	// checkError(err)
 
-	fname, err = generateUnitName(system, "dns")
-	checkError(err)
-	f, err = os.Create(outdir + fname)
-	checkError(err)
-	defer f.Close()
-	service_files = append(service_files, outdir+fname)
+	// fname, err = generateUnitName(system, "dns")
+	// checkError(err)
+	// f, err = os.Create(outdir + fname)
+	// checkError(err)
+	// defer f.Close()
+	// service_files = append(service_files, outdir+fname)
 
-	err = t.Execute(io.Writer(f), system)
-	checkError(err)
-	fmt.Println(system.Name)
+	// err = t.Execute(io.Writer(f), system)
+	// checkError(err)
+	// fmt.Println(system.Name)
 
-	// enable proxy only if httport > 0
-	if system.HttpPort > 0 {
-		color.Println("@bCreating systemd unit file for inverse proxy of service: "+color.ResetCode, system.Name)
-		t = template.New("Systemd proxy service")
-		// t.Delims("{{", "}}\n")
-		t = t.Funcs(template.FuncMap{
-			"volumeExpand": VolumeExpander,
-			"portExpand":   PortExpander,
-			"linkExpand":   LinkExpander,
-			"varExpand":    VarExpander,
-			"lower":        Lower,
-			"replaceId":    ReplaceId,
-			"dns2path":     Dns2Path,
-			"hasid":        HasId,
-			"internalip":   getInternalIP,
-		})
-		t, err = t.Parse(proxy_service)
-		checkError(err)
+	// // enable proxy only if httport > 0
+	// if system.HttpPort > 0 {
+	// 	color.Println("@bCreating systemd unit file for inverse proxy of service: "+color.ResetCode, system.Name)
+	// 	t = template.New("Systemd proxy service")
+	// 	// t.Delims("{{", "}}\n")
+	// 	t = t.Funcs(template.FuncMap{
+	// 		"volumeExpand": VolumeExpander,
+	// 		"portExpand":   PortExpander,
+	// 		"linkExpand":   LinkExpander,
+	// 		"varExpand":    VarExpander,
+	// 		"lower":        Lower,
+	// 		"replaceId":    ReplaceId,
+	// 		"dns2path":     Dns2Path,
+	// 		"hasid":        HasId,
+	// 		"internalip":   getInternalIP,
+	// 	})
+	// 	t, err = t.Parse(proxy_service)
+	// 	checkError(err)
 
-		fname, err = generateUnitName(system, "proxy")
-		checkError(err)
-		f, err = os.Create(outdir + fname)
-		checkError(err)
-		defer f.Close()
-		service_files = append(service_files, outdir+fname)
+	// 	fname, err = generateUnitName(system, "proxy")
+	// 	checkError(err)
+	// 	f, err = os.Create(outdir + fname)
+	// 	checkError(err)
+	// 	defer f.Close()
+	// 	service_files = append(service_files, outdir+fname)
 
-		err = t.Execute(io.Writer(f), system)
-		checkError(err)
-	}
+	// 	err = t.Execute(io.Writer(f), system)
+	// 	checkError(err)
+	// }
 
 	return service_files
 }

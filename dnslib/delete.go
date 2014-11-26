@@ -3,7 +3,6 @@ package dnslib
 import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/etcdlib"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -12,10 +11,11 @@ func DeleteHostnameDNS(client *etcdlib.EtcdClient, id int64, name string, hostna
 
 	external_domain = "production" // region used for
 	internal_domain = "docker"     // region used for
-	server_hostname, err := os.Hostname()
-	if err != nil {
-		return err
-	}
+	server_hostname := region
+	// server_hostname, err := os.Hostname()
+	// if err != nil {
+	// 	return err
+	// }
 
 	out_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + external_domain + "." + region + "." + domain
 	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + server_hostname + "." + domain

@@ -234,7 +234,7 @@ func (l *Lib) GetContainerTcpPort(svcName string, port int) (string, error) {
 		}
 	}
 
-	return "", Error("Tcp port not found in container")
+	return "0", Error("Tcp port not found in container")
 }
 
 func (l *Lib) GetContainerCheckOpenPort(svcName string, port int) (bool, error) {

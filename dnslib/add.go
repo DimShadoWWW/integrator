@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/dockerlib"
 	"github.com/DimShadoWWW/integrator/etcdlib"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,17 +17,19 @@ var (
 	in_hostname     string
 	internal_domain string
 	external_domain string
-	out_port        string
+	out_ipaddress   string
+	out_port        int
 )
 
-func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, name string, hostname string, domain string, port int, region string, priority int) error {
+func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, name string, hostname string, domain string, port int, protocol string, region string, priority int, iface string) error {
 
 	external_domain = "production" // region used for
 	internal_domain = "docker"     // region used for
-	server_hostname, err := os.Hostname()
-	if err != nil {
-		return err
-	}
+	server_hostname := region
+	// server_hostname, err := os.Hostname()
+	// if err != nil {
+	// 	return err
+	// }
 
 	out_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + external_domain + "." + region + "." + domain
 	in_hostname = strconv.FormatInt(id, 10) + "." + hostname + "." + internal_domain + "." + server_hostname + "." + domain
@@ -44,19 +45,49 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, name
 	fmt.Println("Adding internal DNS entry")
 	container_name = name
 
-	for i := 0; i < 31; i++ {
+	retries := 31
+	for i := 0; i < retries; i++ {
 		ipaddress, err = dockerclient.GetContainerIpaddress(container_name)
 		if err != nil {
-			fmt.Println(err)
 			// retry until this
-			if i == 30 {
+			if i == retries-1 {
+				fmt.Println("Failed to get docker's container ip address")
 				return err
 			}
 		} else {
 			break
 		}
+
 		// wait 10 seconds to try again
 		time.Sleep(10 * time.Second)
+	}
+	// Two seconds waiting for stabilize the docker container
+	time.Sleep(2 * time.Second)
+
+	if protocol == "tcp" {
+		p, err := dockerclient.GetContainerTcpPort(container_name, port)
+		if err != nil {
+			fmt.Println(err)
+			out_port = 0
+		}
+		fmt.Println("Tcp port ", port, " listening on ", p)
+		out_port, err = strconv.Atoi(p)
+		if err != nil {
+			fmt.Println(err)
+			out_port = 0
+		}
+	} else {
+		p, err := dockerclient.GetContainerUdpPort(container_name, port)
+		if err != nil {
+			fmt.Println(err)
+			out_port = 0
+		}
+		fmt.Println("Udp port ", port, " listening on ", p)
+		out_port, err = strconv.Atoi(p)
+		if err != nil {
+			fmt.Println(err)
+			out_port = 0
+		}
 	}
 
 	fmt.Println("Creating entry")
@@ -90,41 +121,28 @@ func AddHostnameDNS(client *etcdlib.EtcdClient, dockeruri string, id int64, name
 
 	// Add CoreOS's node external ip address to hostname with region
 	fmt.Println("Adding external DNS entry")
-	out_ipaddress, err := GetLocalIp("8.8.8.8:53")
-	if err != nil {
-		return err
-	}
 
-	out_port = "0"
-	// if port == 0 {
-	// 	out_port = "0"
-	// } else {
-	// 	for i := 0; i < 10; i++ {
-	// 		out_port, err = dockerclient.GetContainerTcpPort(container_name, port)
-	// 		if err != nil {
-	// 			// retry until this
-	// 			fmt.Println(err)
-	// 			if i == 9 {
-	// 				return err
-	// 			}
-	// 		} else {
-	// 			break
-	// 		}
-	// 		// wait 10 seconds to try again
-	// 		time.Sleep(10 * time.Second)
-	// 	}
-	// }
-
-	oport, err := strconv.Atoi(out_port)
-	if err != nil {
-		return err
+	if iface == "" {
+		out_ipaddress, err = GetLocalIp("8.8.8.8:53")
+		if err != nil {
+			return err
+		}
+	} else {
+		out_ipaddress, err = GetLocalIpByInterface(iface)
+		if err != nil {
+			out_ipaddress, err = GetLocalIp("8.8.8.8:53")
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	entry = DnsEntry{
 		Host:     out_ipaddress,
-		Port:     oport,
+		Port:     out_port,
 		Priority: priority,
 	}
+	fmt.Printf("DnsEntry: %#v\n", entry)
 	json_data, err = json.Marshal(entry)
 	if err != nil {
 		return err

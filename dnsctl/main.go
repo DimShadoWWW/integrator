@@ -18,8 +18,10 @@ var (
 	hostname = app.Flag("hostname", "hostname for service").Required().String()
 	domain   = app.Flag("domain", "domain for service").Required().String()
 	region   = app.Flag("region", "region for service").Required().String()
+	protocol = app.Flag("protocol", "protocol used on port").Default("tcp").String()
 	port     = app.Flag("port", "service's listenning port").Required().Int()
 	priority = app.Flag("priority", "service's priority").Default("10").Int()
+	iface    = app.Flag("iface", "network interface used to connect to other nodes").Default("").String()
 	add      = app.Command("add", "Generate and load new services.")
 	del      = app.Command("del", "Unload a service.")
 )
@@ -33,7 +35,7 @@ func main() {
 
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case "add":
-		err := dnslib.AddHostnameDNS(client, *docker, *id, *name, *hostname, *domain, *port, *region, *priority)
+		err := dnslib.AddHostnameDNS(client, *docker, *id, *name, *hostname, *domain, *port, *protocol, *region, *priority, *iface)
 		if err != nil {
 
 		}
