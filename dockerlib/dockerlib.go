@@ -316,7 +316,7 @@ func (l *Lib) getPortBindings(ports map[string]string) map[docker.Port][]docker.
 	for internal, external := range ports {
 		portBinding := []docker.PortBinding{}
 		if external != "" {
-			portBinding = []docker.PortBinding{docker.PortBinding{HostIp: "0.0.0.0", HostPort: external}}
+			portBinding = []docker.PortBinding{docker.PortBinding{HostIP: "0.0.0.0", HostPort: external}}
 		}
 		port := docker.Port(nat.NewPort("tcp", internal))
 
