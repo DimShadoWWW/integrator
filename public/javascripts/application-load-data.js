@@ -71,8 +71,8 @@ $(document).ready(function(){
             if (series.status == 0) {
                 RenderAll();
             }
-            $(this).button('reset');
         });
+        $(this).button('reset');
     });  
 
     $('#btn-clean-cont').click(function() {
@@ -81,8 +81,8 @@ $(document).ready(function(){
             if (series.status == 0) {
                 RenderAll();
             }
-            $(this).button('reset');
         });
+        $(this).button('reset');
     });
 
     $('#btn-clean-images').click(function() {
@@ -91,8 +91,8 @@ $(document).ready(function(){
             if (series.status == 0) {
                 RenderAll();
             }
-            $(this).button('reset');
         });
+        $(this).button('reset');
     });  
 
     $('.btn-start-cont').click(function() {
