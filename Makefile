@@ -9,6 +9,7 @@ deps:
 	go get -u github.com/GeertJohan/go.incremental
 	go get -u github.com/akavel/rsrc
 	go get -u github.com/jessevdk/go-flags
+	go get -u github.com/gin-gonic/gin
 	go install github.com/GeertJohan/go.rice/rice
 	go get -u github.com/gorilla/mux
 	go get -u github.com/rakyll/gometry/cmd/gometry
