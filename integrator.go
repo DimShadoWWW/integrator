@@ -211,7 +211,7 @@ func main() {
 
 			api.GET("/templates/list", client.ListTemplateHandler)
 			api.GET("/templates/read/:id", client.ReadTemplateHandler)
-			api.GET("/templates/save/:id", client.SaveTemplateHandler)
+			api.POST("/templates/save/:id", client.SaveTemplateHandler)
 			api.GET("/templates/run/:id", client.RunTemplateHandler)
 			api.GET("/clean", client.CleanHandler)
 			api.GET("/images", client.StatusImageHandler)
