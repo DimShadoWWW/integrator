@@ -199,6 +199,10 @@ func main() {
 	// AuthRequired() middleware just in the "authorized" group.
 	authorized.Use(AuthRequired(APIKey))
 	{
+
+		r.GET("/", func(c *gin.Context) {
+			c.Redirect(301, "/public/index.html")
+		})
 		// Simple group: v1
 		api := authorized.Group("/api")
 		{

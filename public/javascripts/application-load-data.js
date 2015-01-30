@@ -26,7 +26,9 @@ var data_images = [];
 function fetchData() {
     ++iteration;
     function onDataReceived(series) {
-        CreateButtons(series);
+        if (typeof CreateButtons == 'function') {
+            CreateButtons(series);
+        }
 
         data_containers = [];
         for (var i in series.Containers.Status) {
