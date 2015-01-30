@@ -365,7 +365,7 @@ func (l *Lib) getContainerID(name string) (string, error) {
 }
 
 func (l *Lib) ListImages() {
-	imgs, _ := l.Client.ListImages(false)
+	imgs, _ := l.Client.ListImages(docker.ListImagesOptions{})
 	for _, img := range imgs {
 		// fmt.Println(len(img.RepoTags[0]))
 		// fmt.Print("%v\n\n"+ img)

@@ -11,7 +11,7 @@ deps:
 	go get -u github.com/jessevdk/go-flags
 	go install github.com/GeertJohan/go.rice/rice
 	go get -u github.com/gorilla/mux
-	go get -u github.com/rakyll/gometry
+	go get -u github.com/rakyll/gometry/cmd/gometry
 	go get -u github.com/wsxiaoys/terminal/color
 	go get -u github.com/deckarep/golang-set
 	go get -u github.com/dotcloud/docker/engine
