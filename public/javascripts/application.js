@@ -1,6 +1,6 @@
 $(document).ready(function() {
 
-    $("#nav-sidebar").load("/menu.html", function() {
+    $("#nav-sidebar").load("/public/menu.html", function() {
         var els = document.getElementsByTagName("a");
         for (var i = 0, l = els.length; i < l; i++) {
             var el = els[i];

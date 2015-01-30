@@ -2,45 +2,45 @@ package integratorlib
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/fsouza/go-dockerclient"
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 	"github.com/wsxiaoys/terminal/color"
 	"io"
-	"net/http"
 	"strconv"
 )
 
 //Containers
-func (intg IntegratorStruct) StatusContainerHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
+func (intg IntegratorStruct) StatusContainerHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
 		cont_all, err := intg.Client.GetContainers(true)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
 		result, err := json.Marshal(cont_all)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) StartContainerHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["id"]
+func (intg IntegratorStruct) StartContainerHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
 
 		status := map[string]string{"status": "0"}
 		err := intg.Client.Client.StartContainer(id, nil)
@@ -52,22 +52,22 @@ func (intg IntegratorStruct) StartContainerHandler(c http.ResponseWriter, r *htt
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) RunContainerHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["id"]
+func (intg IntegratorStruct) RunContainerHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
 
 		status := map[string]string{"status": "0"}
 		err := intg.Client.Client.StartContainer(id, nil)
@@ -79,22 +79,22 @@ func (intg IntegratorStruct) RunContainerHandler(c http.ResponseWriter, r *http.
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) StopContainerHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["id"]
+func (intg IntegratorStruct) StopContainerHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
 
 		status := map[string]string{"status": "0"}
 
@@ -107,22 +107,22 @@ func (intg IntegratorStruct) StopContainerHandler(c http.ResponseWriter, r *http
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) DelContainerHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["id"]
+func (intg IntegratorStruct) DelContainerHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
 
 		status := map[string]string{"status": "0"}
 		err := intg.Client.Client.RemoveContainer(docker.RemoveContainerOptions{ID: id})
@@ -134,20 +134,20 @@ func (intg IntegratorStruct) DelContainerHandler(c http.ResponseWriter, r *http.
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) CleanContainersHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
+func (intg IntegratorStruct) CleanContainersHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
 		containers := intg.Client.CleanContainers()
 		intg.Client.RemoveContainers(containers)
 
@@ -155,14 +155,14 @@ func (intg IntegratorStruct) CleanContainersHandler(c http.ResponseWriter, r *ht
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }

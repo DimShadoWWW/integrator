@@ -161,7 +161,7 @@ function EditTemplate(name) {
     // }
 
     $.ajax({
-        url: "/schema.json",
+        url: "/public/schema.json",
         type: "GET",
         dataType: "json",
         success: loadSchema

@@ -2,44 +2,44 @@ package integratorlib
 
 import (
 	"encoding/json"
-	"github.com/gorilla/mux"
+	"errors"
+	"github.com/gin-gonic/gin"
 	"github.com/wsxiaoys/terminal/color"
 	"io"
-	"net/http"
 	"strconv"
 )
 
 //Images
-func (intg IntegratorStruct) StatusImageHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
+func (intg IntegratorStruct) StatusImageHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
 		cont_all, err := intg.Client.GetImages()
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
 		result, err := json.Marshal(cont_all)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) BuildImageHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["name"]
+func (intg IntegratorStruct) BuildImageHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("name")
 
 		status := map[string]string{}
 		id, err := intg.Client.BuildImage(id)
@@ -53,22 +53,22 @@ func (intg IntegratorStruct) BuildImageHandler(c http.ResponseWriter, r *http.Re
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) DelImageHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["id"]
+func (intg IntegratorStruct) DelImageHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
 
 		status := map[string]string{"status": "0"}
 		err := intg.Client.Client.RemoveImage(id)
@@ -80,20 +80,20 @@ func (intg IntegratorStruct) DelImageHandler(c http.ResponseWriter, r *http.Requ
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) CleanImagesHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
+func (intg IntegratorStruct) CleanImagesHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
 		images := intg.Client.CleanImages()
 		intg.Client.RemoveImages(images)
 
@@ -101,14 +101,14 @@ func (intg IntegratorStruct) CleanImagesHandler(c http.ResponseWriter, r *http.R
 		result, err := json.Marshal(status)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }

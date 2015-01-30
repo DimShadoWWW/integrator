@@ -52,25 +52,25 @@ type APIPort struct {
 }
 
 type APIContainers struct {
-	ID         string `json:"Id"`
-	Image      string
-	Command    string
-	Created    int64
-	Status     string
-	Ports      []APIPort
-	SizeRw     int64
-	SizeRootFs int64
-	Names      string
-	Dns        string
-	DnsSearch  string
-	Env        []string
-	Links      []string
-	Volume     []string
-	Detach     bool
-	User       string
-	Workdir    string
-	Hostname   string
-	Privileged bool
+	ID         string    `json:"ID"  binding:"required`
+	Image      string    `json:"Image"  binding:"required"`
+	Command    string    `json:"Command"`
+	Created    int64     `json:"Created"`
+	Status     string    `json:"Status"`
+	Ports      []APIPort `json:"Ports"`
+	SizeRw     int64     `json:"SizeRw"`
+	SizeRootFs int64     `json:"SizeRootFs"`
+	Names      string    `json:"Names"`
+	Dns        string    `json:"Dns"`
+	DnsSearch  string    `json:"DnsSearch"`
+	Env        []string  `json:"Env"`
+	Links      []string  `json:"Links"`
+	Volume     []string  `json:"Volume"`
+	Detach     bool      `json:"Detach"`
+	User       string    `json:"User"`
+	Workdir    string    `json:"Workdir"`
+	Hostname   string    `json:"Hostname"`
+	Privileged bool      `json:"Privileged"`
 }
 
 func NewDockerLib(address string) (Lib, error) {

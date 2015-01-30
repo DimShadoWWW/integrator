@@ -2,13 +2,13 @@ package integratorlib
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/DimShadoWWW/integrator/fleet"
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 	"github.com/wsxiaoys/terminal/color"
 	"io"
 	"io/ioutil"
 	"math/rand"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,12 +17,12 @@ import (
 )
 
 //Containers
-func (intg IntegratorStruct) ListTemplateHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
+func (intg IntegratorStruct) ListTemplateHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
 		fileInfo, err := os.Stat(intg.Basedir)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 		if fileInfo.IsDir() {
@@ -37,26 +37,26 @@ func (intg IntegratorStruct) ListTemplateHandler(c http.ResponseWriter, r *http.
 			result, err := json.Marshal(files)
 			if err != nil {
 				color.Errorf("@bERROR: "+color.ResetCode, err)
-				intg.ReturnsEmpty(c, r)
+				c.JSON(500, gin.H{})
 				return
 			}
-			c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-			c.Header().Set("Content-Type", "application/json")
-			io.WriteString(c, string(result))
+			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+			c.Writer.Header().Set("Content-Type", "application/json")
+			io.WriteString(c.Writer, string(result))
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
 //Containers
-func (intg IntegratorStruct) ReadTemplateHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["id"]
+func (intg IntegratorStruct) ReadTemplateHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
 
 		filename := intg.Basedir + "/" + id + ".json"
 
@@ -64,49 +64,49 @@ func (intg IntegratorStruct) ReadTemplateHandler(c http.ResponseWriter, r *http.
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
 			content := "{}"
-			c.Header().Set("Content-Length", strconv.Itoa(len(content)))
-			c.Header().Set("Content-Type", "application/json")
-			io.WriteString(c, string(content))
+			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
+			c.Writer.Header().Set("Content-Type", "application/json")
+			io.WriteString(c.Writer, string(content))
 			return
 		}
 		if fileInfo.Mode().IsRegular() {
 			content, err := ioutil.ReadFile(filename)
 			if err != nil {
 				color.Errorf("@bERROR: "+color.ResetCode, err)
-				intg.ReturnsEmpty(c, r)
+				c.JSON(500, gin.H{})
 				return
 			} else {
-				c.Header().Set("Content-Length", strconv.Itoa(len(content)))
-				c.Header().Set("Content-Type", "application/json")
-				io.WriteString(c, string(content))
+				c.Writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
+				c.Writer.Header().Set("Content-Type", "application/json")
+				io.WriteString(c.Writer, string(content))
 			}
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
 //Containers
-func (intg IntegratorStruct) SaveTemplateHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
+func (intg IntegratorStruct) SaveTemplateHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
 		color.Println("@r SAVING" + color.ResetCode)
-		vars := mux.Vars(r)
-		id := vars["id"]
 
-		content, err := ioutil.ReadAll(r.Body)
+		id := c.Params.ByName("id")
+
+		content, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			color.Errorf("@bERROR: Failed to read body on @rSaveTemplateHandler "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 		var services fleet.SystemdServiceList
 		err = json.Unmarshal(content, &services)
 		if err != nil {
 			color.Errorf("@bERROR: Failed to unmarshal SystemdServiceList on @rSaveTemplateHandler "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
@@ -119,42 +119,42 @@ func (intg IntegratorStruct) SaveTemplateHandler(c http.ResponseWriter, r *http.
 		f, err := os.Create(filename)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 		_, err = io.WriteString(f, string(services_str))
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 		f.Close()
 
-		c.Header().Set("Content-Length", strconv.Itoa(2))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, "OK")
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(2))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, "OK")
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
 
-func (intg IntegratorStruct) RunTemplateHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		vars := mux.Vars(r)
-		id := vars["id"]
-		serviceid := vars["serviceid"]
+func (intg IntegratorStruct) RunTemplateHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
+		serviceid := c.Params.ByName("serviceid")
 		filename := intg.Basedir + "/" + id + ".json"
 
 		fileInfo, err := os.Stat(filename)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
 			content := "{}"
-			c.Header().Set("Content-Length", strconv.Itoa(len(content)))
-			c.Header().Set("Content-Type", "application/json")
-			io.WriteString(c, string(content))
+			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
+			c.Writer.Header().Set("Content-Type", "application/json")
+			io.WriteString(c.Writer, string(content))
 			return
 		}
 		if fileInfo.Mode().IsRegular() {
@@ -212,18 +212,18 @@ func (intg IntegratorStruct) RunTemplateHandler(c http.ResponseWriter, r *http.R
 					}
 				}
 				content := "OK"
-				c.Header().Set("Content-Length", strconv.Itoa(len(content)))
-				c.Header().Set("Content-Type", "application/json")
-				io.WriteString(c, string(content))
+				c.Writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
+				c.Writer.Header().Set("Content-Type", "application/json")
+				io.WriteString(c.Writer, string(content))
 			}
 		}
 		color.Errorf("@bERROR: "+color.ResetCode, err)
-		c.Header().Set("Content-Length", err.Error())
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, err.Error())
+		c.Writer.Header().Set("Content-Length", err.Error())
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, err.Error())
 
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }

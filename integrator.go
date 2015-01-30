@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"github.com/DimShadoWWW/integrator/integratorlib"
 	"github.com/GeertJohan/go.rice"
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 	"github.com/wsxiaoys/terminal/color"
 	"net/http"
 	"os"
+	"path"
 )
 import log "github.com/cihub/seelog"
 import _ "github.com/rakyll/gometry/http"
@@ -35,6 +37,36 @@ var (
 
 	APIKey string
 )
+
+// checkHeaderThenServe := func(h http.Handler) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		// Set some header.
+// 	}
+// }
+
+// Implements a basic Basic HTTP Authorization. It takes as argument a map[string]string where
+// the key is the user name and the value is the password.
+func AuthRequired(apiKey string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Search user in the slice of allowed credentials
+		if c.Request.Header.Get("API-Access") != APIKey {
+			c.Writer.Header().Set("WWW-Authenticate", "Basic realm=\"Authorization Required\"")
+			c.Fail(401, errors.New("Unauthorized"))
+		}
+	}
+}
+
+func StaticRice(r *gin.Engine, p string, ric *rice.HTTPBox) {
+	prefix := "/public/"
+	p = path.Join(p, "/*filepath")
+	fileServer := http.StripPrefix(prefix, http.FileServer(ric))
+	r.GET(p, func(c *gin.Context) {
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	})
+	r.HEAD(p, func(c *gin.Context) {
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	})
+}
 
 func main() {
 
@@ -94,43 +126,107 @@ func main() {
 		panic(err)
 	}
 
-	checkHeaderThenServe := func(h http.Handler) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			// Set some header.
-			if r.Header.Get("API-Access") == APIKey {
-				w.Header().Add("Keep-Alive", "300")
-				// Serve with the actual handler.
-				h.ServeHTTP(w, r)
-			} else {
-				// http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-				color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
-			}
+	// r := mux.NewRouter()
+	// // r.Headers("API-Access", APIKey)
+	// r.HandleFunc("/api/status", client.StatusHandler)
+	// r.HandleFunc("/api/containers", client.StatusContainerHandler)
+	// r.HandleFunc("/api/containers/del/{id}", client.DelContainerHandler)
+	// r.HandleFunc("/api/containers/stop/{id}", client.StopContainerHandler)
+	// r.HandleFunc("/api/containers/start/{id}", client.StartContainerHandler)
+	// r.HandleFunc("/api/containers/clean", client.CleanContainersHandler)
+	// r.HandleFunc("/api/templates/list", client.ListTemplateHandler)
+	// r.HandleFunc("/api/templates/read/{id}", client.ReadTemplateHandler)
+	// r.HandleFunc("/api/templates/save/{id}", client.SaveTemplateHandler)
+	// r.HandleFunc("/api/templates/run/{id}", client.RunTemplateHandler)
+	// // r.HandleFunc("/api/containers/new", ReadTemplateHandler)
+	// r.HandleFunc("/api/clean", client.CleanHandler)
+	// r.HandleFunc("/api/images", client.StatusImageHandler)
+	// r.HandleFunc("/api/images/build/{name}", client.BuildImageHandler)
+	// r.HandleFunc("/api/images/del/{id}", client.DelImageHandler)
+	// r.HandleFunc("/api/images/clean", client.CleanImagesHandler)
+	// http.Handle("/api/", r)
+	// http.Handle("/", checkHeaderThenServe(http.FileServer(rice.MustFindBox("public").HTTPBox())))
+	// err = http.ListenAndServe(":"+port, nil)
+	// if err != nil {
+	// 	log.Error(err)
+	// }
+
+	// r := gin.Default()
+
+	// // Simple group: v1
+	// api := r.Group("/api")
+
+	// {
+	// 	api.GET("/status", client.StatusHandler)
+	// 	api.GET("/containers/clean", client.CleanContainersHandler)
+	// 	api.GET("/containers", client.StatusContainerHandler)
+	// 	api.GET("/containers/:id/del", client.DelContainerHandler)
+	// 	api.GET("/containers/:id/stop", client.StopContainerHandler)
+	// 	api.GET("/containers/:id/start", client.StartContainerHandler)
+
+	// 	api.GET("/templates/list", client.ListTemplateHandler)
+	// 	api.GET("/templates/:id", client.client.ReadTemplateHandler)
+	// 	api.GET("/templates/:id/save", client.SaveTemplateHandler)
+	// 	api.GET("/templates/:id/run", client.RunTemplateHandler)
+	// 	api.GET("/clean", client.CleanHandler)
+	// 	api.GET("/images", client.StatusImageHandler)
+	// 	// api.GET("/images/:name/build", client.BuildImageHandler)
+	// 	api.GET("/images/del/:id", client.DelImageHandler)
+	// 	api.GET("/images/clean", client.CleanImagesHandler)
+
+	// 	// api.GET("/", client.)
+	// 	// api.GET("/", client.)
+
+	// 	// api.POST("/submit", submitEndpoint)
+	// 	// api.POST("/read", readEndpoint)
+	// }
+
+	// Creates a router without any middleware by default
+	r := gin.New()
+
+	// Global middlewares
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
+
+	// Per route middlewares, you can add as many as you desire.
+	// r.GET("/benchmark", MyBenchLogger(), benchEndpoint)
+
+	// Authorization group
+	// authorized := r.Group("/", AuthRequired())
+	// exactly the same than:
+	authorized := r.Group("/")
+	// per group middlewares! in this case we use the custom created
+	// AuthRequired() middleware just in the "authorized" group.
+	authorized.Use(AuthRequired(APIKey))
+	{
+		// Simple group: v1
+		api := authorized.Group("/api")
+		{
+			api.GET("/status", client.StatusHandler)
+			api.GET("/containers/clean", client.CleanContainersHandler)
+			api.GET("/containers/list", client.StatusContainerHandler)
+			api.GET("/containers/del/:id", client.DelContainerHandler)
+			api.GET("/containers/stop/:id", client.StopContainerHandler)
+			api.GET("/containers/start/:id", client.StartContainerHandler)
+
+			api.GET("/templates/list", client.ListTemplateHandler)
+			api.GET("/templates/read/:id", client.ReadTemplateHandler)
+			api.GET("/templates/save/:id", client.SaveTemplateHandler)
+			api.GET("/templates/run/:id", client.RunTemplateHandler)
+			api.GET("/clean", client.CleanHandler)
+			api.GET("/images", client.StatusImageHandler)
+			// api.GET("/images/:name/build", client.BuildImageHandler)
+			api.GET("/images/del/:id", client.DelImageHandler)
+			api.GET("/images/clean", client.CleanImagesHandler)
+
+			// api.GET("/", client.)
+			// api.POST("/submit", submitEndpoint)
 		}
 	}
 
-	r := mux.NewRouter()
-	// r.Headers("API-Access", APIKey)
-	r.HandleFunc("/api/status", client.StatusHandler)
-	r.HandleFunc("/api/containers", client.StatusContainerHandler)
-	r.HandleFunc("/api/containers/del/{id}", client.DelContainerHandler)
-	r.HandleFunc("/api/containers/stop/{id}", client.StopContainerHandler)
-	r.HandleFunc("/api/containers/start/{id}", client.StartContainerHandler)
-	r.HandleFunc("/api/containers/clean", client.CleanContainersHandler)
-	r.HandleFunc("/api/templates/list", client.ListTemplateHandler)
-	r.HandleFunc("/api/templates/read/{id}", client.ReadTemplateHandler)
-	r.HandleFunc("/api/templates/save/{id}", client.SaveTemplateHandler)
-	r.HandleFunc("/api/templates/run/{id}", client.RunTemplateHandler)
-	// r.HandleFunc("/api/containers/new", ReadTemplateHandler)
-	r.HandleFunc("/api/clean", client.CleanHandler)
-	r.HandleFunc("/api/images", client.StatusImageHandler)
-	r.HandleFunc("/api/images/build/{name}", client.BuildImageHandler)
-	r.HandleFunc("/api/images/del/{id}", client.DelImageHandler)
-	r.HandleFunc("/api/images/clean", client.CleanImagesHandler)
-	http.Handle("/api/", r)
+	// http.Handle("/", checkHeaderThenServe(http.FileServer(rice.MustFindBox("public").HTTPBox())))
+	StaticRice(r, "/public/", rice.MustFindBox("public").HTTPBox())
 
-	http.Handle("/", checkHeaderThenServe(http.FileServer(rice.MustFindBox("public").HTTPBox())))
-	err = http.ListenAndServe(":"+port, nil)
-	if err != nil {
-		log.Error(err)
-	}
+	// Listen and server on 0.0.0.0:8080
+	r.Run(":" + port)
 }

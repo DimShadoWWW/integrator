@@ -2,22 +2,23 @@ package integratorlib
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/DimShadoWWW/integrator/dockerlib"
+	"github.com/gin-gonic/gin"
 	"github.com/wsxiaoys/terminal/color"
 	"io"
 	"net"
-	"net/http"
 	"strconv"
 	"strings"
 )
 
-func (intg IntegratorStruct) StatusHandler(c http.ResponseWriter, r *http.Request) {
-	if intg.Checkaccess(r.Header.Get("API-Access")) {
-		a := getIpAddress(r)
+func (intg IntegratorStruct) StatusHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+		a := getIpAddress(c.Request)
 		rip, err := net.ResolveTCPAddr("tcp", a+":0")
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
@@ -26,7 +27,7 @@ func (intg IntegratorStruct) StatusHandler(c http.ResponseWriter, r *http.Reques
 		cont_all, err := intg.Client.GetContainers(true)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
@@ -55,7 +56,7 @@ func (intg IntegratorStruct) StatusHandler(c http.ResponseWriter, r *http.Reques
 		images, err := intg.Client.GetImages()
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
@@ -84,7 +85,7 @@ func (intg IntegratorStruct) StatusHandler(c http.ResponseWriter, r *http.Reques
 		result, err := json.Marshal(results)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
@@ -92,16 +93,16 @@ func (intg IntegratorStruct) StatusHandler(c http.ResponseWriter, r *http.Reques
 		err = json.Unmarshal(result, &r1)
 		if err != nil {
 			color.Errorf("@bERROR: "+color.ResetCode, err)
-			intg.ReturnsEmpty(c, r)
+			c.JSON(500, gin.H{})
 			return
 		}
 
 		//rr, err := json.NewEncoder(c.ResponseWriter).Encode(m)
-		c.Header().Set("Content-Length", strconv.Itoa(len(result)))
-		c.Header().Set("Content-Type", "application/json")
-		io.WriteString(c, string(result))
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
 	} else {
-		http.Error(c, "403 Forbidden - Access Denied", http.StatusForbidden)
-		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + r.URL.Path[1:] + " from " + r.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
