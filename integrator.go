@@ -50,7 +50,7 @@ func AuthRequired(apiKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Search user in the slice of allowed credentials
 		if c.Request.Header.Get("API-Access") != APIKey {
-			c.Writer.Header().Set("WWW-Authenticate", "Basic realm=\"Authorization Required\"")
+			// c.Writer.Header().Set("WWW-Authenticate", "Basic realm=\"Authorization Required\"")
 			c.Fail(401, errors.New("Unauthorized"))
 		}
 	}
