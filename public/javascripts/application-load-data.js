@@ -127,4 +127,14 @@ $(document).ready(function(){
             }
         });
     });
+
+    $('.btn-del-img').click(function() {
+        // $(this).button('deleting');
+        var id = $(this).attr('id').split("_")[1];
+        $.getJSON('/api/iamges/del/'+id, function(json) {
+            if (series.status == 0) {
+                RenderAll();
+            }
+        });
+    });
 });
