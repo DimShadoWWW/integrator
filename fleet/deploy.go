@@ -3,7 +3,6 @@ package fleet
 import (
 	"fmt"
 	"github.com/DimShadoWWW/fleet-client-go"
-	"log"
 	"os"
 	"path/filepath"
 )
