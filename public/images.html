@@ -47,7 +47,7 @@
             <div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
               <div class="row placeholders">
                 <div class="col-xs-6 col-sm-3 placeholder">
-                  <form id="pullForm" action="/images/pull" method="post">
+                  <form id="pullForm" action="/api/images/pull" method="post">
                     Name: <input type="text" name="name" />
                     <input type="submit" value="Pull Image" />
                   </form>
@@ -89,7 +89,7 @@
             $('#myForm2').submit(function() {
               // inside event callbacks 'this' is the DOM element so we first
               // wrap it in a jQuery object and then invoke ajaxSubmit
-              $(this).ajaxSubmit(options);
+              $(this).ajaxSubmit();
               return false;
             });
           });
