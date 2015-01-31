@@ -3,6 +3,7 @@ package fleet
 import (
 	"fmt"
 	"github.com/DimShadoWWW/fleet-client-go"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -18,7 +19,7 @@ func Deploy(fname string, address string) error {
 	name := fName[0 : len(fName)-len(ext)]
 
 	fleetClient := client.NewClientAPI()
-	fleetClient.Submit(name, fname)
+	err = fleetClient.Submit(name, fname)
 
 	if err != nil {
 		fmt.Errorf("error: %s\n", err)

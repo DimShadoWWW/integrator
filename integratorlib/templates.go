@@ -3,6 +3,7 @@ package integratorlib
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/DimShadoWWW/integrator/fleet"
 	"github.com/gin-gonic/gin"
 	"github.com/wsxiaoys/terminal/color"
@@ -176,6 +177,7 @@ func (intg IntegratorStruct) RunTemplateHandler(c *gin.Context) {
 				myServices.Instances = 1
 			}
 
+			content := "Loaded: ["
 			for inst := 0; inst < myServices.Instances; inst++ {
 				color.Println("Instance", inst)
 
@@ -199,18 +201,22 @@ func (intg IntegratorStruct) RunTemplateHandler(c *gin.Context) {
 					service_files := fleet.CreateSystemdFiles(serv, "./")
 
 					color.Println("DEPLOY")
-					for _, s := range service_files {
+					for ks, s := range service_files {
+						if ks != 0 {
+							content = content + ", "
+						}
 						err = fleet.Deploy(s, "")
 						if err != nil {
 							color.Println(err)
 						} else {
 							os.Remove("service_files")
 						}
+						content = content + s
 					}
 
 				}
 			}
-			content := "OK"
+			content = content + "]"
 			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
 			c.Writer.Header().Set("Content-Type", "application/json")
 			io.WriteString(c.Writer, string(content))
