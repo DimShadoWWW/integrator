@@ -112,3 +112,31 @@ func (intg IntegratorStruct) CleanImagesHandler(c *gin.Context) {
 		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
 	}
 }
+
+func (intg IntegratorStruct) PullImageHandler(c *gin.Context) {
+    if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+        name := c.Request.FormValue("name")
+
+        status := map[string]string{}
+        err := intg.Client.PullImage(name)
+        if err != nil {
+            color.Errorf("@rERROR: "+color.ResetCode, err)
+            status = map[string]string{"status": "1", "error": err.Error()}
+        } else {
+            status = map[string]string{"status": "0", "error": nil}
+        }
+
+        result, err := json.Marshal(status)
+        if err != nil {
+            color.Errorf("@bERROR: "+color.ResetCode, err)
+            c.JSON(500, gin.H{})
+            return
+        }
+        c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+        c.Writer.Header().Set("Content-Type", "application/json")
+        io.WriteString(c.Writer, string(result))
+    } else {
+        c.Fail(401, errors.New("Unauthorized"))
+        color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
+    }
+}
