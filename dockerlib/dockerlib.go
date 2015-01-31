@@ -386,7 +386,7 @@ func (l *Lib) PullImage(name string) error {
 	imageData := strings.Split(name, ":")
 	name = imageData[0]
 	tag := "latest"
-	if len(name) > 1 {
+	if len(imageData) > 1 {
 		tag = imageData[1]
 	}
 	return l.Client.PullImage(docker.PullImageOptions{Repository: name, Tag: tag}, docker.AuthConfiguration{})
