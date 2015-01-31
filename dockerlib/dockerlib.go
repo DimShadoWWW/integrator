@@ -383,13 +383,13 @@ func (l *Lib) ListImages() {
 }
 
 func (l *Lib) PullImage(name string) error {
-    imageData := strings.Split(name, ":")
-    name := imageData[0]
-    tag := "latest"
-    if len(name) > 1 {
-        tag = imageData[1]
-    }
-    return l.Client.PullImage(docker.PullImageOptions{Repository: name, Tag: tag}, docker.AuthConfiguration{})
+	imageData := strings.Split(name, ":")
+	name = imageData[0]
+	tag := "latest"
+	if len(name) > 1 {
+		tag = imageData[1]
+	}
+	return l.Client.PullImage(docker.PullImageOptions{Repository: name, Tag: tag}, docker.AuthConfiguration{})
 }
 
 func (l *Lib) RemoveContainers(ids []string) error {
