@@ -1,10 +1,9 @@
 package fleet
 
 import (
-	"bytes"
 	"fmt"
+	"github.com/DimShadoWWW/fleet-client-go"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
@@ -15,26 +14,14 @@ func Deploy(fname string, address string) error {
 	}
 
 	fName := filepath.Base(fname)
+	ext := filepath.Ext(fName)
+	name := fName[0 : len(fName)-len(ext)]
 
-	fmt.Println("/usr/bin/fleetctl", "start", fName)
-	cmd := exec.Command("/usr/bin/fleetctl", "start", fName)
+	fleetClient := client.NewClientAPI()
+	fleetClient.Submit(name, fname)
 
-	if address != "" {
-		fmt.Println("/usr/bin/fleetctl", "-endpoint=\""+address+"\"", "start", fName)
-		cmd = exec.Command("/usr/bin/fleetctl", "-endpoint=\""+address+"\"", "start", fName)
-	}
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-
-	err = cmd.Run()
 	if err != nil {
 		fmt.Errorf("error: %s\n", err)
-		fmt.Printf("stderr: %s\n", stderr.String())
-		fmt.Printf("stdout: %s\n", stdout.String())
 		return err
 	}
 
