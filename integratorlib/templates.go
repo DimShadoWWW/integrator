@@ -104,7 +104,7 @@ func (intg IntegratorStruct) DeleteTemplateHandler(c *gin.Context) {
 			status = map[string]string{"status": "1", "error": err.Error()}
 		} else {
 			if fileInfo.Mode().IsRegular() {
-				err = os.Remove("service_files")
+				err = os.Remove(filename)
 				if err != nil {
 					color.Errorf("@rERROR: "+color.ResetCode, err)
 					status = map[string]string{"status": "1", "error": err.Error()}
