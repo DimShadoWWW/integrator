@@ -3,7 +3,6 @@ package integratorlib
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/DimShadoWWW/integrator/fleet"
 	"github.com/gin-gonic/gin"
 	"github.com/wsxiaoys/terminal/color"
