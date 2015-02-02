@@ -186,88 +186,102 @@ func (intg IntegratorStruct) RunTemplateHandler(c *gin.Context) {
 		id := c.Params.ByName("id")
 		serviceid := c.Params.ByName("serviceid")
 		filename := intg.Basedir + "/" + id + ".json"
+		tempdir := intg.Basedir + "/../tmp"
+		status := map[string]string{"status": "0", "error": ""}
+
+		// check if the source dir exist
+		tmp, err := os.Stat(tempdir)
+		if err != nil {
+			panic(err)
+		}
+
+		// check if the source is indeed a directory or not
+		if !tmp.IsDir() {
+		}
 
 		fileInfo, err := os.Stat(filename)
 		if err != nil {
-			color.Errorf("@bERROR: "+color.ResetCode, err)
-			content := "{}"
-			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
-			c.Writer.Header().Set("Content-Type", "application/json")
-			io.WriteString(c.Writer, string(content))
-			return
-		}
-		if fileInfo.Mode().IsRegular() && filename != "" {
-			color.Println("@bStarting: "+color.ResetCode, id)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		} else {
+			if fileInfo.Mode().IsRegular() && filename != "" {
+				color.Println("@bStarting: "+color.ResetCode, id)
 
-			rand.Seed(time.Now().UnixNano())
-			var id int64
-			var err error
+				rand.Seed(time.Now().UnixNano())
+				var id int64
+				var err error
 
-			myServices := fleet.SystemdServiceList{}
+				myServices := fleet.SystemdServiceList{}
 
-			file, _ := os.Open(filename)
+				file, _ := os.Open(filename)
 
-			err = myServices.FromJSON(file)
-			if err != nil {
-				panic(err)
-			}
-			if myServices.Instances == 0 {
-				myServices.Instances = 1
-			}
+				err = myServices.FromJSON(file)
+				if err != nil {
+					panic(err)
+				}
+				if myServices.Instances == 0 {
+					myServices.Instances = 1
+				}
 
-			content := "Loaded: ["
-			for inst := 0; inst < myServices.Instances; inst++ {
-				color.Println("Instance", inst)
+				content := "Loaded: ["
+				for inst := 0; inst < myServices.Instances; inst++ {
+					color.Println("Instance", inst)
 
-				if serviceid != "" {
-					id, err = strconv.ParseInt(serviceid, 10, 64)
-					if err != nil {
-						color.Println("Fatal error ", err.Error())
+					if serviceid != "" {
+						id, err = strconv.ParseInt(serviceid, 10, 64)
+						if err != nil {
+							color.Println("Fatal error ", err.Error())
+							for i := 0; i < 10; i++ {
+								id = rand.Int63() + 1
+							}
+						}
+					} else {
 						for i := 0; i < 10; i++ {
 							id = rand.Int63() + 1
 						}
 					}
-				} else {
-					for i := 0; i < 10; i++ {
-						id = rand.Int63() + 1
+
+					for _, serv := range myServices.Services {
+						serv.Id = id
+
+						service_files := fleet.CreateSystemdFiles(serv, intg.Basedir+"/../tmp/")
+
+						color.Println("DEPLOY")
+						for ks, s := range service_files {
+							if ks != 0 {
+								content = content + ", "
+							}
+							err = fleet.Deploy(s, "")
+							if err != nil {
+								color.Println(err)
+							} else {
+								os.Remove(s)
+							}
+							content = content + s
+						}
+
 					}
 				}
-
-				for _, serv := range myServices.Services {
-					serv.Id = id
-
-					service_files := fleet.CreateSystemdFiles(serv, "./")
-
-					color.Println("DEPLOY")
-					for ks, s := range service_files {
-						if ks != 0 {
-							content = content + ", "
-						}
-						err = fleet.Deploy(s, "")
-						if err != nil {
-							color.Println(err)
-						} else {
-							os.Remove(s)
-						}
-						content = content + s
-					}
-
-				}
+				content = content + "]"
+				status = map[string]string{"status": "0", "error": "", "msg": content}
+			} else {
+				status = map[string]string{"status": "1", "error": "Template is not a file"}
 			}
-			content = content + "]"
-			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(content)))
-			c.Writer.Header().Set("Content-Type", "application/json")
-			io.WriteString(c.Writer, string(content))
-
-		} else {
-			color.Errorf("@bERROR: "+color.ResetCode, err)
-			c.Writer.Header().Set("Content-Length", err.Error())
-			c.Writer.Header().Set("Content-Type", "application/json")
-			io.WriteString(c.Writer, err.Error())
 		}
 
+		result, err := json.Marshal(status)
+		if err != nil {
+			result = []byte("{\"status\": \"1\", \"error\": \"Failed to create json msg\"}")
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+			c.Writer.Header().Set("Content-Type", "application/json")
+			io.WriteString(c.Writer, string(result))
+		} else {
+			c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+			c.Writer.Header().Set("Content-Type", "application/json")
+			io.WriteString(c.Writer, string(result))
+		}
 	} else {
-		c.Fail(401, errors.New("Unauthorized"))
 		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
+		c.Fail(401, errors.New("Unauthorized"))
 	}
 }

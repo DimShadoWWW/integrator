@@ -1,8 +1,8 @@
 package fleet
 
 import (
-	"fmt"
 	"github.com/DimShadoWWW/fleet-client-go"
+	"github.com/wsxiaoys/terminal/color"
 	"os"
 	"path/filepath"
 )
@@ -21,7 +21,7 @@ func Deploy(fname string, address string) error {
 	err = fleetClient.Submit(name, fname)
 
 	if err != nil {
-		fmt.Errorf("error: %s\n", err)
+		color.Errorf("@rERROR: "+color.ResetCode, err)
 		return err
 	}
 
