@@ -26,7 +26,8 @@ deps:
 	go get -u github.com/alecthomas/kingpin
 	go get -u gopkg.in/redis.v2
 	go get -u github.com/DimShadoWWW/fleet-client-go
-	apt-get -qq -y install zip
+	apt-get update -y
+	apt-get install -y zip
 
 build: builddnsctl buildproxyctl buildintegratorctl buildintegrator
 
