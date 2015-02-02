@@ -25,6 +25,7 @@ deps:
 	go get -u github.com/cihub/seelog
 	go get -u github.com/alecthomas/kingpin
 	go get -u gopkg.in/redis.v2
+	go get -u github.com/DimShadoWWW/fleet-client-go
 
 build: builddnsctl buildproxyctl buildintegratorctl buildintegrator
 
