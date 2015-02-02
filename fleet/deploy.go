@@ -3,6 +3,7 @@ package fleet
 import (
 	"github.com/DimShadoWWW/fleet-client-go"
 	"github.com/wsxiaoys/terminal/color"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -14,14 +15,14 @@ func Deploy(fname string, address string) error {
 	}
 
 	fName := filepath.Base(fname)
-	ext := filepath.Ext(fName)
-	name := fName[0 : len(fName)-len(ext)]
 
 	fleetClient := client.NewClientAPI()
-	err = fleetClient.Submit(name, fname)
+	log.Println("Loading: ", fname)
+	err = fleetClient.Submit(fName, fname)
 
 	if err != nil {
 		color.Errorf("@rERROR: "+color.ResetCode, err)
+		log.Println(err.Error())
 		return err
 	}
 
