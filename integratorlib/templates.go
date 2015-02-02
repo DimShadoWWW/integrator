@@ -90,6 +90,45 @@ func (intg IntegratorStruct) ReadTemplateHandler(c *gin.Context) {
 }
 
 //Containers
+func (intg IntegratorStruct) DeleteTemplateHandler(c *gin.Context) {
+	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
+
+		id := c.Params.ByName("id")
+		status := map[string]string{"status": "0", "error": ""}
+
+		filename := intg.Basedir + "/" + id + ".json"
+
+		fileInfo, err := os.Stat(filename)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		} else {
+			if fileInfo.Mode().IsRegular() {
+				err = os.Remove("service_files")
+				if err != nil {
+					color.Errorf("@rERROR: "+color.ResetCode, err)
+					status = map[string]string{"status": "1", "error": err.Error()}
+				}
+			}
+		}
+
+		result, err := json.Marshal(status)
+		if err != nil {
+			color.Errorf("@rERROR: "+color.ResetCode, err)
+			status = map[string]string{"status": "1", "error": err.Error()}
+		} else {
+			status = map[string]string{"status": "0", "error": ""}
+		}
+		c.Writer.Header().Set("Content-Length", strconv.Itoa(len(result)))
+		c.Writer.Header().Set("Content-Type", "application/json")
+		io.WriteString(c.Writer, string(result))
+	} else {
+		c.Fail(401, errors.New("Unauthorized"))
+		color.Errorf("@bERROR: " + color.ResetCode + " (403) accessing " + c.Request.URL.Path[1:] + " from " + c.Request.RemoteAddr)
+	}
+}
+
+//Containers
 func (intg IntegratorStruct) SaveTemplateHandler(c *gin.Context) {
 	if intg.Checkaccess(c.Request.Header.Get("API-Access")) {
 		color.Println("@r SAVING" + color.ResetCode)
@@ -208,7 +247,7 @@ func (intg IntegratorStruct) RunTemplateHandler(c *gin.Context) {
 						if err != nil {
 							color.Println(err)
 						} else {
-							os.Remove("service_files")
+							os.Remove(s)
 						}
 						content = content + s
 					}

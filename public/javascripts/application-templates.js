@@ -5,6 +5,7 @@ function CreateButtons(series) {
     for (var i in series) {
         buttons = "<button type=\"button\" onclick=\"$.ajax({url: '/api/templates/run/" + series[i] + "',type: 'GET',dataType: 'json'})\" data-loading-text=\"Starting...\" class=\"btn btn-primary btn-start-cont\">Start</button>"
         buttons += "<button type=\"button\" onclick=\"EditTemplate('" + series[i] + "')\" class=\"btn btn-primary btn-del-cont\">Edit</button>"
+        buttons = "<button type=\"button\" onclick=\"$.ajax({url: '/api/templates/del/" + series[i] + "',type: 'GET',dataType: 'json'})\" data-loading-text=\"Removing...\" class=\"btn btn-primary btn-start-cont\">Delete</button>"
         output += "<tr><td>" + series[i].substring(0, 12) + "</td><td>" + series[i] + "</td><td>" + buttons + "</td></tr>";
     }
     output += "</tbody></table>";
