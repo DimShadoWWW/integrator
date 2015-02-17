@@ -18,12 +18,13 @@ import (
 )
 import log "github.com/cihub/seelog"
 
-type Error string
+type Error string // Error type
 
 func (e Error) Error() string {
 	return string(e)
 }
 
+// Docker lib struct
 type Lib struct {
 	Address string
 	Cfg     []string
@@ -39,11 +40,12 @@ type APIImages struct {
 	Created     int64
 	Size        int64
 	VirtualSize int64
-	ParentId    string `json:",omitempty"`
+	ParentID    string `json:",omitempty"`
 	Repository  string `json:",omitempty"`
 	Tag         string `json:",omitempty"`
 }
 
+// dockey port struct
 type APIPort struct {
 	PrivatePort int64
 	PublicPort  int64
@@ -51,6 +53,7 @@ type APIPort struct {
 	IP          string
 }
 
+// container struct
 type APIContainers struct {
 	ID         string    `json:"ID"  binding:"required`
 	Image      string    `json:"Image"  binding:"required"`
@@ -61,8 +64,8 @@ type APIContainers struct {
 	SizeRw     int64     `json:"SizeRw"`
 	SizeRootFs int64     `json:"SizeRootFs"`
 	Names      string    `json:"Names"`
-	Dns        string    `json:"Dns"`
-	DnsSearch  string    `json:"DnsSearch"`
+	DNS        string    `json:"Dns"`
+	DNSSearch  string    `json:"DnsSearch"`
 	Env        []string  `json:"Env"`
 	Links      []string  `json:"Links"`
 	Volume     []string  `json:"Volume"`
@@ -73,6 +76,7 @@ type APIContainers struct {
 	Privileged bool      `json:"Privileged"`
 }
 
+// Get a DockerLib struct
 func NewDockerLib(address string) (Lib, error) {
 	c, err := docker.NewClient(address)
 	if err != nil {
@@ -87,93 +91,7 @@ func NewDockerLib(address string) (Lib, error) {
 	return Lib{Address: address, Client: c, Localip: ip}, nil
 }
 
-func (l *Lib) Start(svcName string) error {
-	// image := l.cfg[svcName].Image
-	// ports := l.cfg[svcName].Ports
-	// env := l.cfg[svcName].Env
-
-	// if l.pids.hasPid(svcName) {
-	// 	return errors.New("Service " + svcName + " already running")
-	// }
-
-	// // Start Dependency Containers
-	// if err := l.startDeps(svcName); err != nil {
-	// 	return err
-	// }
-
-	// // Create Container
-	// config := docker.Config{
-	// 	Image: image,
-	// 	Env:   l.getEnv(env),
-	// }
-	// opts := docker.CreateContainerOptions{Config: &config}
-
-	// container, err := l.Client.CreateContainer(opts)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// // Start Container
-	// links, err := l.getLinks(svcName)
-	// if err != nil {
-	// 	return err
-	// }
-	// hostConfig := docker.HostConfig{
-	// 	PortBindings: l.getPortBindings(ports),
-	// 	Links:        links,
-	// }
-	// err = l.Client.StartContainer(container.ID, &hostConfig)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// for a, b := range hostConfig.PortBindings[docker.Port(80)] {
-	// 	fmt.Printf("%v\t", a)
-	// 	fmt.Printf("%v\n", b)
-	// }
-	// // l.redis.ReddisAdd(env["HOST"], l.localip+":"+string(hostConfig.PortBindings[docker.Port(80)][].HostPort)
-
-	// if err = l.pids.setPid(svcName, container.ID); err != nil {
-	// 	return err
-	// }
-	return nil
-}
-
-func (l *Lib) Stop(svcName string) error {
-	// if !l.pids.hasPid(svcName) {
-	// 	return errors.New("Service not running")
-	// }
-
-	// id, err := l.pids.getPid(svcName)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// if err = l.Client.StopContainer(id, 5); err != nil {
-	// 	return err
-	// }
-
-	// if err = l.pids.removePid(svcName); err != nil {
-	// 	return err
-	// }
-	return nil
-}
-
-func (l *Lib) startDeps(svcName string) error {
-	// deps := l.cfg[svcName].Deps
-
-	// for _, svcName := range deps {
-	// 	if !l.pids.hasPid(svcName) {
-
-	// 		if err := l.Start(svcName); err != nil {
-	// 			return err
-	// 		}
-	// 		fmt.Println("Dep " + svcName + " started")
-	// 	}
-	// }
-	return nil
-}
-
+// Get container name
 func (l *Lib) getContainerName(svcName string) (string, error) {
 	c, err := docker.NewClient(l.Address)
 	if err != nil {
@@ -190,6 +108,7 @@ func (l *Lib) getContainerName(svcName string) (string, error) {
 	return container.Name, nil
 }
 
+// Get container ports
 func (l *Lib) GetContainerPorts(svcName string) (map[docker.Port][]docker.PortBinding, error) {
 	c, err := docker.NewClient(l.Address)
 	if err != nil {
@@ -207,6 +126,7 @@ func (l *Lib) GetContainerPorts(svcName string) (map[docker.Port][]docker.PortBi
 	return container.NetworkSettings.Ports, nil
 }
 
+// Get container tcp port
 func (l *Lib) GetContainerTcpPort(svcName string, port int) (string, error) {
 	c, err := docker.NewClient(l.Address)
 	if err != nil {
@@ -237,6 +157,7 @@ func (l *Lib) GetContainerTcpPort(svcName string, port int) (string, error) {
 	return "0", Error("Tcp port not found in container")
 }
 
+// Check if container has this port open
 func (l *Lib) GetContainerCheckOpenPort(svcName string, port int) (bool, error) {
 	c, err := docker.NewClient(l.Address)
 	if err != nil {
@@ -264,6 +185,7 @@ func (l *Lib) GetContainerCheckOpenPort(svcName string, port int) (bool, error) 
 	return false, Error("Port not open in container")
 }
 
+// Get container udp port
 func (l *Lib) GetContainerUdpPort(svcName string, port int) (string, error) {
 	c, err := docker.NewClient(l.Address)
 	if err != nil {
@@ -293,6 +215,8 @@ func (l *Lib) GetContainerUdpPort(svcName string, port int) (string, error) {
 
 	return "", Error("Udp port not found in container")
 }
+
+// Get container's ip address in docker0
 func (l *Lib) GetContainerIpaddress(svcName string) (string, error) {
 	c, err := docker.NewClient(l.Address)
 	if err != nil {
@@ -310,6 +234,7 @@ func (l *Lib) GetContainerIpaddress(svcName string) (string, error) {
 	return container.NetworkSettings.IPAddress, nil
 }
 
+// Get container's port bindings
 func (l *Lib) getPortBindings(ports map[string]string) map[docker.Port][]docker.PortBinding {
 	portBindings := make(map[docker.Port][]docker.PortBinding)
 
@@ -326,6 +251,7 @@ func (l *Lib) getPortBindings(ports map[string]string) map[docker.Port][]docker.
 	return portBindings
 }
 
+// Get container environmet var
 func (l *Lib) getEnv(env map[string]string) []string {
 	envFlat := make([]string, 0, 10)
 	for k, v := range env {
@@ -334,6 +260,7 @@ func (l *Lib) getEnv(env map[string]string) []string {
 	return envFlat
 }
 
+// Get container's links
 func (l *Lib) getLinks(svcName string) ([]string, error) {
 	// deps := l.cfg[svcName].Deps
 	// links := make([]string, 0, 10)
@@ -351,6 +278,7 @@ func (l *Lib) getLinks(svcName string) ([]string, error) {
 	return nil, nil
 }
 
+// Get container id
 func (l *Lib) getContainerID(name string) (string, error) {
 
 	conts, _ := l.Client.ListContainers(docker.ListContainersOptions{})
@@ -364,24 +292,23 @@ func (l *Lib) getContainerID(name string) (string, error) {
 	return "", Error("Container not found")
 }
 
+// List local docker images
 func (l *Lib) ListImages() {
 	imgs, _ := l.Client.ListImages(docker.ListImagesOptions{})
 	for _, img := range imgs {
-		// fmt.Println(len(img.RepoTags[0]))
-		// fmt.Print("%v\n\n"+ img)
-		// fmt.Print("%v\n\n"+ img.RepoTags)
 		if img.RepoTags[0] != "<none>:<none>" {
 			color.Println("@rID: "+color.ResetCode+" "+color.ResetCode+" ", img.ID)
 			color.Println("@rRepoTags: "+color.ResetCode+" ", img.RepoTags)
 			// color.Println("@rCreated: "+ img.Created)
 			// color.Println("@rSize: "+ img.Size)
 			// color.Println("@rVirtualSize: "+ img.VirtualSize/(1000*1000)+ "MB")
-			// color.Println("@rParentId: "+ img.ParentId)
+			// color.Println("@rParentID: "+ img.ParentID)
 			// color.Println("@rRepository: "+ img.Repository)
 		}
 	}
 }
 
+// Pull docker image
 func (l *Lib) PullImage(name string) error {
 	imageData := strings.Split(name, ":")
 	name = imageData[0]
@@ -392,6 +319,7 @@ func (l *Lib) PullImage(name string) error {
 	return l.Client.PullImage(docker.PullImageOptions{Repository: name, Tag: tag}, docker.AuthConfiguration{})
 }
 
+// Remove docker container
 func (l *Lib) RemoveContainers(ids []string) error {
 	for _, id := range ids {
 		color.Println("@bREMOVING: "+color.ResetCode, id)
@@ -406,6 +334,7 @@ func (l *Lib) RemoveContainers(ids []string) error {
 	return nil
 }
 
+// start a container
 func (l *Lib) StartContainer(id string) error {
 	color.Println("@bREMOVING: "+color.ResetCode, id)
 	err := l.Client.StartContainer(id, nil)
@@ -419,6 +348,7 @@ func (l *Lib) StartContainer(id string) error {
 	return nil
 }
 
+// Remove docker images
 func (l *Lib) RemoveImages(ids []string) error {
 	for _, id := range ids {
 		color.Println("@bREMOVING: "+color.ResetCode, id)
@@ -433,6 +363,7 @@ func (l *Lib) RemoveImages(ids []string) error {
 	return nil
 }
 
+// Get docker containers
 func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 	query := "0"
 	if all {
@@ -507,6 +438,7 @@ func (l *Lib) GetContainers(all bool) ([]APIContainers, error) {
 	return containers, nil
 }
 
+// Get local docker images
 func (l *Lib) GetImages() ([]APIImages, error) {
 
 	req, err := http.NewRequest("GET", "/images/json", nil)
@@ -551,11 +483,11 @@ func (l *Lib) GetImages() ([]APIImages, error) {
 		// Created     int64
 		// Size        int64
 		// VirtualSize int64
-		// ParentId    string `json:",omitempty"`
+		// ParentID    string `json:",omitempty"`
 		// Repository  string `json:",omitempty"`
 		// Tag         string `json:",omitempty"`
 		c.ID = out.Get("Id")
-		c.ParentId = out.Get("ParentId")
+		c.ParentID = out.Get("ParentID")
 		c.Repository = out.Get("Repository")
 		c.Tag = out.Get("Tag")
 		c.RepoTags = out.GetList("RepoTags")
@@ -568,6 +500,7 @@ func (l *Lib) GetImages() ([]APIImages, error) {
 	return images, nil
 }
 
+// Get status of all docker containers and images
 func (l *Lib) Status() {
 	color.Println("Docker status:")
 	// list all containers
@@ -633,6 +566,7 @@ func (l *Lib) Status() {
 	color.Println(t1.Render())
 }
 
+// Remove failed containers
 func (l *Lib) CleanContainers() []string {
 	// list all containers
 	cont_run, err := l.GetContainers(false)
@@ -668,6 +602,7 @@ func (l *Lib) CleanContainers() []string {
 	return ids
 }
 
+// Remove docker images without tag (headless images or garbage from build process)
 func (l *Lib) CleanImages() []string {
 
 	imgs_all, err := l.GetImages()
@@ -687,6 +622,7 @@ func (l *Lib) CleanImages() []string {
 	return ids
 }
 
+// build a docker image
 func (l *Lib) BuildImage(name string) (string, error) {
 	// imgs_all, err := l.Client.BuildImage(opts)
 	// if err != nil {
@@ -705,6 +641,7 @@ func (l *Lib) BuildImage(name string) (string, error) {
 	return "", nil
 }
 
+// Get server's external ip address
 func GetLocalIp(server string) (string, error) {
 	conn, err := net.Dial("udp", server)
 	if err != nil {
