@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/fleet"
 	"github.com/DimShadoWWW/integrator/proxyctl/hipache"
-//	"github.com/DimShadoWWW/integrator/proxyctl/vulcand"
+	"github.com/DimShadoWWW/integrator/proxyctl/vulcand"
 	"github.com/alecthomas/kingpin"
 	"os"
 	"strconv"
+	"time"
 )
 
 var (
@@ -16,6 +17,7 @@ var (
 	redisAccess = app.Flag("redis", "Redis address").Default("redis://:@127.0.0.1:6379/0").String()
 	docker      = app.Flag("docker", "docker uri for fleet").Default("unix:///var/run/docker.sock").String()
 	proxytype   = app.Flag("type", "proxy software (hipache, vulcand)").Default("hipache").String()
+	TTL         = app.Flag("ttl", "server ttl in DB ('10s', '5m', '300ms')").Default("10s").String()
 	Id          = app.Flag("id", "id for service").Required().String()
 	Name        = app.Flag("name", "docker container's name").Required().String()
 	Hostname    = app.Flag("hostname", "hostname for service").Required().String()
@@ -32,13 +34,19 @@ func main() {
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	// Register user
 	case "add":
+		ttl, err := time.ParseDuration(*TTL)
+		if err != nil {
+			fmt.Printf("TTL parsing error: %s\n", err)
+			os.Exit(1)
+		}
+
 		machines := []string{"http://" + serverIP.String() + ":4001"}
 
 		fmt.Printf("%s\n", machines)
 
 		id, err := strconv.ParseInt(*Id, 10, 64)
 		if err != nil {
-			fmt.Printf("id conversion errorr: %s\n", err)
+			fmt.Printf("id conversion error: %s\n", err)
 		}
 
 		f := fleet.SystemdService{
@@ -51,13 +59,13 @@ func main() {
 		}
 
 		switch {
-//		case *proxytype == "vulcand":
-//			err = vulcand.VulcandHostAdd(machines, *docker, f, *Port, *Path)
-//			if err != nil {
-//				fmt.Printf("Proxy addition failed: %s\n", err)
-//				fmt.Fprintln(os.Stderr, err)
-//				os.Exit(1)
-//			}
+		case *proxytype == "vulcand":
+			err = vulcand.VulcandHostAdd(machines, *docker, f, *Port, *Path, ttl)
+			if err != nil {
+				fmt.Printf("Proxy addition failed: %s\n", err)
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
 		case *proxytype == "hipache":
 			err = hipache.HostAdd(*redisAccess, *docker, f, *Port, *Path)
 			if err != nil {
@@ -89,13 +97,13 @@ func main() {
 		}
 
 		switch {
-//		case *proxytype == "vulcand":
-//			err = vulcand.VulcandHostDel(machines, *docker, f, *Port, *Path)
-//			if err != nil {
-//				fmt.Printf("Proxy deletion failed: %s\n", err)
-//				fmt.Fprintln(os.Stderr, err)
-//				os.Exit(2)
-//			}
+		case *proxytype == "vulcand":
+			err = vulcand.VulcandHostDel(machines, *docker, f, *Port, *Path)
+			if err != nil {
+				fmt.Printf("Proxy deletion failed: %s\n", err)
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(2)
+			}
 		case *proxytype == "hipache":
 			err = hipache.HostDel(*redisAccess, *docker, f, *Port, *Path)
 			if err != nil {

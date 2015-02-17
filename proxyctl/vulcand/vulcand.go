@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"github.com/DimShadoWWW/integrator/dockerlib"
 	"github.com/DimShadoWWW/integrator/fleet"
-	"github.com/mailgun/vulcand/backend"
-	"github.com/mailgun/vulcand/backend/etcdbackend"
-	"github.com/mailgun/vulcand/plugin/registry"
+	"github.com/mailgun/vulcand/Godeps/_workspace/src/github.com/mailgun/go-etcd/etcd"
+	"github.com/mailgun/vulcand/api"
+	"github.com/mailgun/vulcand/engine"
+	"github.com/mailgun/vulcand/engine/etcdng"
+	"github.com/mailgun/vulcand/plugin"
+	"log"
 	"math/rand"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -19,12 +23,18 @@ var (
 	external_domain  = "production"
 )
 
+type Command struct {
+	vulcanUrl string
+	client    *api.Client
+	registry  *plugin.Registry
+}
+
 type VulcandHostJSON struct {
 	Host string ` json:"host"`
 	Port int    `json:"port"`
 }
 
-func VulcandHostAdd(etcdnodes []string, dockeruri string, service fleet.SystemdService, port int, path string) error {
+func VulcandHostAdd(etcdnodes []string, dockeruri string, service fleet.SystemdService, port int, path string, ttl time.Duration) error {
 
 	// Docker internal ip address
 	fmt.Println("Adding internal PROXY entry")
@@ -35,6 +45,7 @@ func VulcandHostAdd(etcdnodes []string, dockeruri string, service fleet.SystemdS
 	}
 
 	fullname := service.Hostname + "." + external_domain + "." + service.Region + "." + service.Domain
+	route := "Host(`" + fullname + "`) && Path(`/`)"
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -57,89 +68,86 @@ func VulcandHostAdd(etcdnodes []string, dockeruri string, service fleet.SystemdS
 		time.Sleep(10 * time.Second)
 	}
 
-	client, err := etcdbackend.NewEtcdBackend(registry.GetRegistry(), etcdnodes, "vulcand", "STRONG")
+	r := plugin.NewRegistry()
+	mengine, err := etcdng.New(etcdnodes, "vulcand", r, etcdng.Options{EtcdConsistency: etcd.STRONG_CONSISTENCY})
+	client := api.NewClient(strings.Replace(etcdnodes[0], ":4001", ":8182", -1), r)
+
+	var backendId, serverId string
+	var frontend *engine.Frontend
+	var backend *engine.Backend
+	// , upstreamId string
+	// var server engine.Server
+
+	frontends, err := mengine.GetFrontends()
 	if err != nil {
 		return err
 	}
 
-	var host_exist backend.Host
-	var endpointId, locationId, upstreamId string
+	for _, fe := range frontends {
+		if fe.Route == route {
+			bk := engine.BackendKey{Id: fe.BackendId}
+			b, err := client.GetBackend(bk)
+			if err != nil {
+				return err
+			}
+			srvs, err := client.GetServers(b.GetUniqueId())
+			if err != nil {
+				return err
+			}
 
-	hosts, err := client.GetHosts()
-	for _, host := range hosts {
-		if host.Name == fullname {
-			host_exist = *host
-			break
-		}
-	}
-
-	if host_exist.Name == "" {
-		host, err := backend.NewHost(fullname)
-		if err != nil {
-			return err
-		}
-		host, err = client.AddHost(host)
-		if err != nil {
-			return err
-		}
-	} else {
-		fmt.Println("Checking hosts")
-		for _, location := range host_exist.Locations {
-			fmt.Println("Checking location", location.Hostname)
-			if location.Path == path {
-				locationId = location.Id
-				upstreamId = location.Upstream.Id
-				for _, endpoint := range location.Upstream.Endpoints {
-					if endpoint.Url == "http://"+ipaddress+":"+strconv.Itoa(port) {
-						endpointId = endpoint.Id
-						break
-						break
-					}
+			for _, se := range srvs {
+				if se.URL == "http://"+ipaddress+":"+strconv.Itoa(port) {
+					// server was already added, return with no error
+					return nil
 				}
+			}
+			backendId = b.GetId()
+			frontend = &engine.Frontend{
+				Id:        fe.Id,
+				BackendId: fe.BackendId,
+				Route:     fe.Route,
+				Type:      fe.Type,
+				Settings:  fe.Settings,
 			}
 		}
 	}
 
-	if upstreamId == "" {
-		fmt.Println("Creating upstream")
-		upstreamId = genId()
-		upstream, err := backend.NewUpstream(upstreamId)
+	if backendId == "" {
+		settings, err := getBackendSettings()
 		if err != nil {
 			return err
 		}
-		_, err = client.AddUpstream(upstream)
+
+		backendId = genId()
+		backend, err = engine.NewHTTPBackend(backendId, settings)
 		if err != nil {
 			return err
 		}
 	}
 
-	if locationId == "" {
-		fmt.Println("Creating location")
-		locationId = strconv.FormatInt(service.Id, 10)
-		location, err := backend.NewLocation(fullname, locationId, path, upstreamId)
+	if serverId == "" {
+		serverId = genId()
+		server, err := engine.NewServer(serverId, "http://"+ipaddress+":"+strconv.Itoa(port))
 		if err != nil {
-			fmt.Println("Failed to create location")
 			return err
 		}
-		_, err = client.AddLocation(location)
-		if err != nil {
-			fmt.Println("Failed to add location")
+		if err := client.UpsertServer(engine.BackendKey{Id: backend.GetId()}, *server, ttl); err != nil {
 			return err
 		}
+
 	}
 
-	if endpointId == "" {
-		fmt.Println("Creating endpoint")
-		endpointId = strconv.FormatInt(service.Id, 10)
-		endpoint, err := backend.NewEndpoint(upstreamId, endpointId, "http://"+ipaddress+":"+strconv.Itoa(port))
+	if frontend == nil {
+		settings, err := getFrontendSettings()
 		if err != nil {
-			fmt.Println("Failed to create endpoint")
 			return err
 		}
 
-		_, err = client.AddEndpoint(endpoint)
+		frontend, err = engine.NewHTTPFrontend(genId(), backend.GetId(), route, settings)
 		if err != nil {
-			fmt.Println("Failed to add endpoint")
+			return err
+		}
+		if err := client.UpsertFrontend(*frontend, ttl); err != nil {
 			return err
 		}
 	}
@@ -150,6 +158,7 @@ func VulcandHostAdd(etcdnodes []string, dockeruri string, service fleet.SystemdS
 func VulcandHostDel(etcdnodes []string, dockeruri string, service fleet.SystemdService, port int, path string) error {
 
 	fullname := service.Hostname + "." + external_domain + "." + service.Region + "." + service.Domain
+	route := "Host(`" + fullname + "`) && Path(`/`)"
 
 	// Docker internal ip address
 	fmt.Println("Remove internal PROXY entry")
@@ -178,26 +187,51 @@ func VulcandHostDel(etcdnodes []string, dockeruri string, service fleet.SystemdS
 		time.Sleep(10 * time.Second)
 	}
 
-	client, err := etcdbackend.NewEtcdBackend(registry.GetRegistry(), etcdnodes, "vulcand", "STRONG")
+	r := plugin.NewRegistry()
+	mengine, err := etcdng.New(etcdnodes, "vulcand", r, etcdng.Options{EtcdConsistency: etcd.STRONG_CONSISTENCY})
+	client := api.NewClient(strings.Replace(etcdnodes[0], ":4001", ":8182", -1), r)
+
+	var frontend *engine.Frontend
+	var backend *engine.Backend
+	var server *engine.Server
+
+	frontends, err := mengine.GetFrontends()
 	if err != nil {
 		return err
 	}
 
-	var endpointId, locationId, upstreamId string
+	for _, fe := range frontends {
+		if fe.Route == route {
+			bk := engine.BackendKey{Id: fe.BackendId}
+			b, err := client.GetBackend(bk)
+			if err != nil {
+				return err
+			}
+			srvs, err := client.GetServers(b.GetUniqueId())
+			if err != nil {
+				return err
+			}
 
-	host, err := client.GetHost(fullname)
-	if err != nil {
-		return err
-	}
-
-	for _, location := range host.Locations {
-		fmt.Println("Checking location path: '", location.Path, "'")
-		if location.Path == path {
-			locationId = location.GetId()
-			upstreamId = location.Upstream.GetId()
-			for _, endpoint := range location.Upstream.Endpoints {
-				if endpoint.Url == "http://"+ipaddress+":"+strconv.Itoa(port) {
-					endpointId = endpoint.GetId()
+			for _, se := range srvs {
+				if se.URL == "http://"+ipaddress+":"+strconv.Itoa(port) {
+					backend = &engine.Backend{
+						Id:       b.Id,
+						Type:     b.Type,
+						Stats:    b.Stats,
+						Settings: b.Settings,
+					}
+					server = &engine.Server{
+						Id:    se.Id,
+						URL:   se.URL,
+						Stats: se.Stats,
+					}
+					frontend = &engine.Frontend{
+						Id:        fe.Id,
+						BackendId: fe.BackendId,
+						Route:     fe.Route,
+						Type:      fe.Type,
+						Settings:  fe.Settings,
+					}
 					break
 					break
 				}
@@ -205,39 +239,37 @@ func VulcandHostDel(etcdnodes []string, dockeruri string, service fleet.SystemdS
 		}
 	}
 
-	if locationId != "" {
-		fmt.Println("Deleting location")
-		err = client.DeleteLocation(fullname, locationId)
+	if backend != nil {
+		if server != nil {
+			sk := engine.ServerKey{BackendKey: engine.BackendKey{Id: backend.GetId()}, Id: server.GetId()}
+			err = client.DeleteServer(sk)
+			if err != nil {
+				return err
+			} else {
+				log.Println("server deleted")
+			}
+		}
+
+		srvs, err := client.GetServers(backend.GetUniqueId())
 		if err != nil {
 			return err
 		}
-	}
 
-	if endpointId != "" {
-		fmt.Println("Deleting endpoint")
-		err = client.DeleteEndpoint(upstreamId, endpointId)
-		if err != nil {
-			return err
-		}
-	}
-	if upstreamId != "" {
-		fmt.Println("Deleting upstream")
-		err = client.DeleteUpstream(upstreamId)
-		if err != nil {
-			return err
-		}
-	}
-
-	host, err = client.GetHost(fullname)
-	if err != nil {
-		return err
-	}
-
-	if len(host.Locations) == 0 {
-		fmt.Println("Deleting host")
-		err = client.DeleteHost(fullname)
-		if err != nil {
-			return err
+		if len(srvs) == 0 {
+			err = client.DeleteBackend(engine.BackendKey{Id: backend.GetId()})
+			if err != nil {
+				return err
+			} else {
+				log.Println("backend empty, deleted")
+				err := client.DeleteFrontend(engine.FrontendKey{Id: frontend.GetId()})
+				if err != nil {
+					return err
+				} else {
+					log.Println("frontend deleted")
+				}
+			}
+		} else {
+			log.Println("backend not empty")
 		}
 	}
 
@@ -250,4 +282,45 @@ func genId() string {
 		id = rand.Int63() + 1
 	}
 	return string(strconv.FormatInt(id, 10))
+}
+
+func getBackendSettings() (engine.HTTPBackendSettings, error) {
+	s := engine.HTTPBackendSettings{}
+
+	// readTimeout
+	s.Timeouts.Read = "3"
+	// dialTimeout
+	s.Timeouts.Dial = "3"
+	// handshakeTimeout
+	s.Timeouts.TLSHandshake = "3"
+
+	// keepAlivePeriod
+	s.KeepAlive.Period = "10"
+	// maxIdleConns
+	s.KeepAlive.MaxIdleConnsPerHost = 20
+
+	// tlsSettings, err := getTLSSettings(c)
+	// if err != nil {
+	// 	return s, err
+	// }
+	// s.TLS = tlsSettings
+	return s, nil
+}
+
+func getFrontendSettings() (engine.HTTPFrontendSettings, error) {
+	s := engine.HTTPFrontendSettings{}
+
+	// maxMemBodyKB "maximum request size to cache in memory, in KB"
+	// s.Limits.MaxMemBodyBytes = int64(c.Int("maxMemBodyKB") * 1024)
+	// maxBodyKB "maximum request size to allow for a frontend, in KB"
+	// s.Limits.MaxBodyBytes = int64(c.Int("maxBodyKB") * 1024)
+
+	// failoverPredicate "predicate that defines cases when failover is allowed"
+	// s.FailoverPredicate = c.String("failoverPredicate")
+	// forwardHost "hostname to set when forwarding a request"
+	// s.Hostname = c.String("forwardHost")
+	// trustForwardHeader "allows copying X-Forwarded-For header value from the original request"
+	s.TrustForwardHeader = false
+
+	return s, nil
 }
