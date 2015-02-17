@@ -26,6 +26,7 @@ deps:
 	go get -u github.com/alecthomas/kingpin
 	go get -u gopkg.in/redis.v2
 	go get -u github.com/DimShadoWWW/fleet-client-go
+	go get -u github.com/mailgun/vulcand
 	apt-get update -y
 	apt-get install -y zip
 
